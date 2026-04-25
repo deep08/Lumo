@@ -91,7 +91,7 @@ def get_ai_response(user_message, user_number):
     
     # Call Claude API
     response = client.messages.create(
-        model="claude-sonnet-4-20250514",
+        model="claude-sonnet-4-5",
         max_tokens=1000,
         system=system,
         messages=recent_history
