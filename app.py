@@ -9,8 +9,8 @@ app = Flask(__name__)
 # ==============================
 # CONFIGURATION — FILL THESE IN
 # ==============================
-ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY")# From console.anthropic.com
-COOK_NUMBER = "whatsapp:+918586822152"              # Cook's WhatsApp number with country code
+ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY")
+COOK_NUMBER = os.environ.get("COOK_NUMBER", "whatsapp:+91XXXXXXXXXX")
 
 # ==============================
 # LUMO'S MEMORY (simple for now)
@@ -118,8 +118,8 @@ def send_to_cook(recipe_text, from_number):
     from twilio.rest import Client
     
     # You'll add your Twilio credentials here
-    TWILIO_SID = os.environ.get("TWILIO_SID")
-    TWILIO_TOKEN = os.environ.get("TWILIO_TOKEN")
+    TWILIO_SID = "your_twilio_account_sid"
+    TWILIO_TOKEN = "your_twilio_auth_token"
     TWILIO_NUMBER = "whatsapp:+14155238886"  # Your Twilio sandbox number
     
     client = Client(TWILIO_SID, TWILIO_TOKEN)
