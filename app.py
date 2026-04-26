@@ -8,8 +8,6 @@ from supabase import create_client
 
 app = Flask(__name__)
 conversations = {}
-
-# Track processed messages to prevent duplicates
 processed_messages = set()
 
 def get_supabase():
@@ -74,8 +72,7 @@ def send_whatsapp_message(to_number, message):
     except Exception as e:
         print(f"Error sending message: {e}")
 
-def process_and_reply(user_message, user_number, message_sid):
-    """Runs in background — processes message and sends reply"""
+def process_and_reply(user_message, user_number):
     try:
         client = anthropic.Anthropic(api_key=os.environ.get("ANTHROPIC_API_KEY"))
 
@@ -134,25 +131,37 @@ Is week ka meal history: {meal_history}"""
             "content": ai_reply
         })
 
-        # Send reply to user
+        # Send ONE reply to user
         send_whatsapp_message(user_number, ai_reply)
 
-        # If user said yes — save meal and forward to cook
+        # Check if user confirmed a meal
         yes_words = ["yes", "haan", "ha", "theek", "okay", "ok",
                      "bilkul", "haan ji", "perfect", "bana lo", "bana do"]
-        if any(word in user_message.lower() for word in yes_words):
+        user_said_yes = any(word in user_message.lower() for word in yes_words)
+
+        if user_said_yes:
+            # Find last suggestion
+            last_suggestion = None
             for msg in reversed(conversations[user_number]):
                 if msg["role"] == "assistant" and "Aaj raat ke liye:" in msg["content"]:
-                    meal_name = extract_meal_name(msg["content"])
-                    save_meal(user_number, meal_name)
-                    cook_number = os.environ.get("COOK_NUMBER")
-                    if cook_number and cook_number != "whatsapp:+91XXXXXXXXXX":
-                        send_whatsapp_message(cook_number, f"Lumo se aaj ka recipe:\n\n{ai_reply}")
+                    last_suggestion = msg["content"]
                     break
 
+            if last_suggestion:
+                meal_name = extract_meal_name(last_suggestion)
+                save_meal(user_number, meal_name)
+
+                # Forward to cook ONLY if cook number is set
+                cook_number = os.environ.get("COOK_NUMBER", "")
+                if cook_number and "XXXXXXXXXX" not in cook_number:
+                    send_whatsapp_message(
+                        cook_number,
+                        f"Lumo se aaj ka recipe:\n\n{ai_reply}"
+                    )
+
     except Exception as e:
-        print(f"Error processing: {e}")
-        send_whatsapp_message(user_number, "Ek second, kuch issue aa gaya. Dobara try karo!")
+        print(f"Error: {e}")
+        send_whatsapp_message(user_number, "Kuch issue aa gaya. Dobara try karo!")
 
 @app.route("/webhook", methods=["POST"])
 def webhook():
@@ -160,28 +169,25 @@ def webhook():
     user_number = request.form.get("From", "")
     message_sid = request.form.get("MessageSid", "")
 
-    print(f"Message from {user_number}: {incoming_message} (SID: {message_sid})")
+    print(f"Received: {message_sid} from {user_number}: {incoming_message}")
 
-    # Ignore duplicate messages using MessageSid
+    # Deduplicate using MessageSid
     if message_sid in processed_messages:
-        print(f"Duplicate detected, ignoring: {message_sid}")
+        print(f"Duplicate ignored: {message_sid}")
         return "", 200
 
     processed_messages.add(message_sid)
-
-    # Keep set small
     if len(processed_messages) > 100:
         processed_messages.clear()
 
-    # Process in background so Twilio gets instant response
+    # Process in background — respond to Twilio instantly
     thread = threading.Thread(
         target=process_and_reply,
-        args=(incoming_message, user_number, message_sid)
+        args=(incoming_message, user_number)
     )
     thread.daemon = True
     thread.start()
 
-    # Return instantly to Twilio — prevents retry
     return "", 200
 
 @app.route("/", methods=["GET"])
