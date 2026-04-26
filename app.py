@@ -2,11 +2,15 @@ from flask import Flask, request
 from twilio.rest import Client as TwilioClient
 import anthropic
 import os
+import threading
 from datetime import datetime, date
 from supabase import create_client
 
 app = Flask(__name__)
 conversations = {}
+
+# Track processed messages to prevent duplicates
+processed_messages = set()
 
 def get_supabase():
     url = os.environ.get("SUPABASE_URL")
@@ -70,22 +74,24 @@ def send_whatsapp_message(to_number, message):
     except Exception as e:
         print(f"Error sending message: {e}")
 
-def get_ai_response(user_message, user_number):
-    client = anthropic.Anthropic(api_key=os.environ.get("ANTHROPIC_API_KEY"))
+def process_and_reply(user_message, user_number, message_sid):
+    """Runs in background — processes message and sends reply"""
+    try:
+        client = anthropic.Anthropic(api_key=os.environ.get("ANTHROPIC_API_KEY"))
 
-    if user_number not in conversations:
-        conversations[user_number] = []
+        if user_number not in conversations:
+            conversations[user_number] = []
 
-    meal_history = get_meal_history(user_number)
+        meal_history = get_meal_history(user_number)
 
-    conversations[user_number].append({
-        "role": "user",
-        "content": user_message
-    })
+        conversations[user_number].append({
+            "role": "user",
+            "content": user_message
+        })
 
-    recent_history = conversations[user_number][-10:]
+        recent_history = conversations[user_number][-10:]
 
-    system = f"""Tu Lumo hai — ek friendly meal assistant jo Indian households ko decide karne mein help karta hai ki aaj raat kya banana hai.
+        system = f"""Tu Lumo hai — ek friendly meal assistant jo Indian households ko decide karne mein help karta hai ki aaj raat kya banana hai.
 
 Tera core goal: Healthy eating ko easiest choice banana — bina health lecture diye. Balanced meals suggest kar jo tasty bhi ho aur nutritious bhi, lekin kabhi "yeh healthy hai" mat bol.
 
@@ -114,46 +120,69 @@ Agar no: ek alag suggest karo.
 Aaj ka din: {datetime.now().strftime("%A")}
 Is week ka meal history: {meal_history}"""
 
-    response = client.messages.create(
-        model="claude-sonnet-4-5",
-        max_tokens=1000,
-        system=system,
-        messages=recent_history
-    )
+        response = client.messages.create(
+            model="claude-sonnet-4-5",
+            max_tokens=1000,
+            system=system,
+            messages=recent_history
+        )
 
-    ai_reply = response.content[0].text
+        ai_reply = response.content[0].text
 
-    conversations[user_number].append({
-        "role": "assistant",
-        "content": ai_reply
-    })
+        conversations[user_number].append({
+            "role": "assistant",
+            "content": ai_reply
+        })
 
-    yes_words = ["yes", "haan", "ha", "theek", "okay", "ok",
-                 "bilkul", "haan ji", "perfect", "bana lo", "bana do"]
-    if any(word in user_message.lower() for word in yes_words):
-        for msg in reversed(conversations[user_number]):
-            if msg["role"] == "assistant" and "Aaj raat ke liye:" in msg["content"]:
-                meal_name = extract_meal_name(msg["content"])
-                save_meal(user_number, meal_name)
-                cook_number = os.environ.get("COOK_NUMBER")
-                if cook_number and cook_number != "whatsapp:+91XXXXXXXXXX":
-                    send_whatsapp_message(cook_number, f"Lumo se aaj ka recipe:\n\n{ai_reply}")
-                break
+        # Send reply to user
+        send_whatsapp_message(user_number, ai_reply)
 
-    return ai_reply
+        # If user said yes — save meal and forward to cook
+        yes_words = ["yes", "haan", "ha", "theek", "okay", "ok",
+                     "bilkul", "haan ji", "perfect", "bana lo", "bana do"]
+        if any(word in user_message.lower() for word in yes_words):
+            for msg in reversed(conversations[user_number]):
+                if msg["role"] == "assistant" and "Aaj raat ke liye:" in msg["content"]:
+                    meal_name = extract_meal_name(msg["content"])
+                    save_meal(user_number, meal_name)
+                    cook_number = os.environ.get("COOK_NUMBER")
+                    if cook_number and cook_number != "whatsapp:+91XXXXXXXXXX":
+                        send_whatsapp_message(cook_number, f"Lumo se aaj ka recipe:\n\n{ai_reply}")
+                    break
+
+    except Exception as e:
+        print(f"Error processing: {e}")
+        send_whatsapp_message(user_number, "Ek second, kuch issue aa gaya. Dobara try karo!")
 
 @app.route("/webhook", methods=["POST"])
 def webhook():
     incoming_message = request.form.get("Body", "").strip()
     user_number = request.form.get("From", "")
+    message_sid = request.form.get("MessageSid", "")
 
-    print(f"Message from {user_number}: {incoming_message}")
-    lumo_reply = get_ai_response(incoming_message, user_number)
-    print(f"Lumo replies: {lumo_reply}")
+    print(f"Message from {user_number}: {incoming_message} (SID: {message_sid})")
 
-    send_whatsapp_message(user_number, lumo_reply)
+    # Ignore duplicate messages using MessageSid
+    if message_sid in processed_messages:
+        print(f"Duplicate detected, ignoring: {message_sid}")
+        return "", 200
 
-    return ""
+    processed_messages.add(message_sid)
+
+    # Keep set small
+    if len(processed_messages) > 100:
+        processed_messages.clear()
+
+    # Process in background so Twilio gets instant response
+    thread = threading.Thread(
+        target=process_and_reply,
+        args=(incoming_message, user_number, message_sid)
+    )
+    thread.daemon = True
+    thread.start()
+
+    # Return instantly to Twilio — prevents retry
+    return "", 200
 
 @app.route("/", methods=["GET"])
 def home():
