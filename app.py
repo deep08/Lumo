@@ -173,12 +173,16 @@ def send_to_cook(recipe_text, from_number):
 def webhook():
     incoming_message = request.form.get("Body", "").strip()
     user_number = request.form.get("From", "")
+    
+    # Respond to Twilio immediately to prevent retries
+    response = MessagingResponse()
+    
     print(f"Message from {user_number}: {incoming_message}")
     lumo_reply = get_ai_response(incoming_message, user_number)
     print(f"Lumo replies: {lumo_reply}")
-    response = MessagingResponse()
+    
     response.message(lumo_reply)
-    return str(response)
+    return str(response), 200, {"Content-Type": "text/xml"}
 
 @app.route("/", methods=["GET"])
 def home():
