@@ -3,14 +3,13 @@ from twilio.twiml.messaging_response import MessagingResponse
 from twilio.rest import Client as TwilioClient
 import anthropic
 import os
+import threading
 from datetime import datetime, date
 from supabase import create_client
 
 app = Flask(__name__)
 conversations = {}
 processed_messages = set()
-
-# In-memory cache — loaded from Supabase once per user session
 meal_history_cache = {}
 preferences_cache = {}
 
@@ -20,7 +19,6 @@ def get_supabase():
     return create_client(url, key)
 
 def get_meal_history(user_number):
-    """Load from cache or Supabase"""
     if user_number in meal_history_cache:
         return meal_history_cache[user_number]
     try:
@@ -53,7 +51,6 @@ def save_meal(user_number, meal_name):
             "cooked_date": date.today().strftime("%Y-%m-%d"),
             "accepted": True
         }).execute()
-        # Update cache
         current = meal_history_cache.get(user_number, "Abhi tak kuch nahi")
         if current == "Abhi tak kuch nahi":
             meal_history_cache[user_number] = meal_name
@@ -64,7 +61,6 @@ def save_meal(user_number, meal_name):
         print(f"Error saving meal: {e}")
 
 def get_preferences(user_number):
-    """Load from cache or Supabase"""
     if user_number in preferences_cache:
         return preferences_cache[user_number]
     try:
@@ -91,7 +87,6 @@ def save_preference(user_number, preference):
             "user_number": user_number,
             "preference": preference
         }).execute()
-        # Update cache
         current = preferences_cache.get(user_number, "")
         if current and current != "Koi specific preference nahi":
             preferences_cache[user_number] = current + ", " + preference
@@ -101,12 +96,7 @@ def save_preference(user_number, preference):
     except Exception as e:
         print(f"Error saving preference: {e}")
 
-def send_to_cook(recipe_text, user_number):
-    cook_number = os.environ.get("COOK_NUMBER", "")
-    if not cook_number or "XXXXXXXXXX" in cook_number:
-        return
-    if cook_number == user_number:
-        return
+def send_whatsapp(to_number, message):
     try:
         client = TwilioClient(
             os.environ.get("TWILIO_SID"),
@@ -114,12 +104,12 @@ def send_to_cook(recipe_text, user_number):
         )
         client.messages.create(
             from_="whatsapp:+14155238886",
-            to=cook_number,
-            body=f"Lumo se aaj ka recipe:\n\n{recipe_text}"
+            to=to_number,
+            body=message
         )
-        print(f"Recipe sent to cook")
+        print(f"Sent to {to_number}")
     except Exception as e:
-        print(f"Error sending to cook: {e}")
+        print(f"Error sending: {e}")
 
 def extract_meal_name(ai_reply):
     try:
@@ -148,34 +138,34 @@ def is_preference(message):
                 "prefer", "vegetarian", "vegan", "light khana", "heavy nahi"]
     return any(t in msg for t in triggers)
 
-def get_ai_response(user_message, user_number):
-    client = anthropic.Anthropic(api_key=os.environ.get("ANTHROPIC_API_KEY"))
+def process_and_reply(user_message, user_number):
+    try:
+        client = anthropic.Anthropic(api_key=os.environ.get("ANTHROPIC_API_KEY"))
 
-    if user_number not in conversations:
-        conversations[user_number] = []
+        if user_number not in conversations:
+            conversations[user_number] = []
 
-    if is_reset(user_message):
-        conversations[user_number] = []
-        meal_history_cache.pop(user_number, None)
-        preferences_cache.pop(user_number, None)
-        return "Fresh start! 🌟 Batao aaj raat kya banana chahte ho?"
+        if is_reset(user_message):
+            conversations[user_number] = []
+            meal_history_cache.pop(user_number, None)
+            preferences_cache.pop(user_number, None)
+            send_whatsapp(user_number, "Fresh start! 🌟 Batao aaj raat kya banana chahte ho?")
+            return
 
-    # Save preference if detected (async-like — fire and use cache)
-    if is_preference(user_message):
-        save_preference(user_number, user_message)
+        if is_preference(user_message):
+            save_preference(user_number, user_message)
 
-    # Use cached data — fast, no DB call if already loaded
-    meal_history = get_meal_history(user_number)
-    preferences = get_preferences(user_number)
+        meal_history = get_meal_history(user_number)
+        preferences = get_preferences(user_number)
 
-    conversations[user_number].append({
-        "role": "user",
-        "content": user_message
-    })
+        conversations[user_number].append({
+            "role": "user",
+            "content": user_message
+        })
 
-    recent_history = conversations[user_number][-10:]
+        recent_history = conversations[user_number][-10:]
 
-    system = f"""Tu Lumo hai — ek friendly meal assistant jo Indian households ko decide karne mein help karta hai ki aaj raat kya banana hai.
+        system = f"""Tu Lumo hai — ek friendly meal assistant jo Indian households ko decide karne mein help karta hai ki aaj raat kya banana hai.
 
 Tera core goal: Healthy eating ko easiest choice banana — bina health lecture diye. Balanced meals suggest kar jo tasty bhi ho aur nutritious bhi, lekin kabhi "yeh healthy hai" mat bol.
 
@@ -210,32 +200,39 @@ Aaj ka din: {datetime.now().strftime("%A")}
 Meal history: {meal_history}
 Preferences: {preferences}"""
 
-    response = client.messages.create(
-        model="claude-sonnet-4-5",
-        max_tokens=1000,
-        system=system,
-        messages=recent_history
-    )
+        response = client.messages.create(
+            model="claude-sonnet-4-5",
+            max_tokens=1000,
+            system=system,
+            messages=recent_history
+        )
 
-    ai_reply = response.content[0].text
+        ai_reply = response.content[0].text
 
-    conversations[user_number].append({
-        "role": "assistant",
-        "content": ai_reply
-    })
+        conversations[user_number].append({
+            "role": "assistant",
+            "content": ai_reply
+        })
 
-    if is_yes(user_message):
-        last_suggestion = None
-        for msg in reversed(conversations[user_number]):
-            if msg["role"] == "assistant" and "Aaj raat ke liye:" in msg["content"]:
-                last_suggestion = msg["content"]
-                break
-        if last_suggestion:
-            meal_name = extract_meal_name(last_suggestion)
-            save_meal(user_number, meal_name)
-            send_to_cook(ai_reply, user_number)
+        # Send reply to user
+        send_whatsapp(user_number, ai_reply)
 
-    return ai_reply
+        if is_yes(user_message):
+            last_suggestion = None
+            for msg in reversed(conversations[user_number]):
+                if msg["role"] == "assistant" and "Aaj raat ke liye:" in msg["content"]:
+                    last_suggestion = msg["content"]
+                    break
+            if last_suggestion:
+                meal_name = extract_meal_name(last_suggestion)
+                save_meal(user_number, meal_name)
+                cook_number = os.environ.get("COOK_NUMBER", "")
+                if cook_number and "XXXXXXXXXX" not in cook_number and cook_number != user_number:
+                    send_whatsapp(cook_number, f"Lumo se aaj ka recipe:\n\n{ai_reply}")
+
+    except Exception as e:
+        print(f"Error: {e}")
+        send_whatsapp(user_number, "Kuch issue aa gaya. Dobara try karo!")
 
 @app.route("/webhook", methods=["POST"])
 def webhook():
@@ -245,21 +242,25 @@ def webhook():
 
     print(f"Received: {message_sid} from {user_number}: {incoming_message}")
 
+    # Deduplicate using MessageSid
     if message_sid in processed_messages:
         print(f"Duplicate ignored: {message_sid}")
-        resp = MessagingResponse()
-        return str(resp)
+        return "", 200
 
     processed_messages.add(message_sid)
     if len(processed_messages) > 100:
         processed_messages.clear()
 
-    lumo_reply = get_ai_response(incoming_message, user_number)
-    print(f"Lumo replies: {lumo_reply}")
+    # Respond to Twilio INSTANTLY
+    # Process and reply in background thread
+    thread = threading.Thread(
+        target=process_and_reply,
+        args=(incoming_message, user_number)
+    )
+    thread.daemon = True
+    thread.start()
 
-    resp = MessagingResponse()
-    resp.message(lumo_reply)
-    return str(resp)
+    return "", 200
 
 @app.route("/", methods=["GET"])
 def home():
