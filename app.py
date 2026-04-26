@@ -156,7 +156,7 @@ def webhook():
     send_whatsapp_message(user_number, lumo_reply)
 
     # Return empty TwiML so Twilio doesn't send a second message
-     return ""
+     return '<?xml version="1.0" encoding="UTF-8"?><Response></Response>', 200, {"Content-Type": "text/xml"}
 
 @app.route("/", methods=["GET"])
 def home():
