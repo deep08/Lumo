@@ -10,15 +10,19 @@ app = Flask(__name__)
 conversations = {}
 processed_messages = set()
 
+# In-memory cache — loaded from Supabase once per user session
+meal_history_cache = {}
+preferences_cache = {}
+
 def get_supabase():
     url = os.environ.get("SUPABASE_URL")
     key = os.environ.get("SUPABASE_KEY")
     return create_client(url, key)
 
-# ==============================
-# MEAL HISTORY
-# ==============================
 def get_meal_history(user_number):
+    """Load from cache or Supabase"""
+    if user_number in meal_history_cache:
+        return meal_history_cache[user_number]
     try:
         today = date.today()
         week_start = today.strftime("%Y-%m-%d")
@@ -31,8 +35,11 @@ def get_meal_history(user_number):
             .execute()
         if result.data:
             meals = [row["meal_name"] for row in result.data]
-            return ", ".join(meals)
-        return "Abhi tak kuch nahi"
+            history = ", ".join(meals)
+        else:
+            history = "Abhi tak kuch nahi"
+        meal_history_cache[user_number] = history
+        return history
     except Exception as e:
         print(f"Error getting meal history: {e}")
         return "Abhi tak kuch nahi"
@@ -46,14 +53,20 @@ def save_meal(user_number, meal_name):
             "cooked_date": date.today().strftime("%Y-%m-%d"),
             "accepted": True
         }).execute()
+        # Update cache
+        current = meal_history_cache.get(user_number, "Abhi tak kuch nahi")
+        if current == "Abhi tak kuch nahi":
+            meal_history_cache[user_number] = meal_name
+        else:
+            meal_history_cache[user_number] = current + ", " + meal_name
         print(f"Saved meal: {meal_name}")
     except Exception as e:
         print(f"Error saving meal: {e}")
 
-# ==============================
-# PREFERENCES — stored in Supabase
-# ==============================
 def get_preferences(user_number):
+    """Load from cache or Supabase"""
+    if user_number in preferences_cache:
+        return preferences_cache[user_number]
     try:
         db = get_supabase()
         result = db.table("Preferences")\
@@ -62,8 +75,11 @@ def get_preferences(user_number):
             .execute()
         if result.data:
             prefs = [row["preference"] for row in result.data]
-            return ", ".join(prefs)
-        return "Koi specific preference nahi"
+            preferences = ", ".join(prefs)
+        else:
+            preferences = "Koi specific preference nahi"
+        preferences_cache[user_number] = preferences
+        return preferences
     except Exception as e:
         print(f"Error getting preferences: {e}")
         return "Koi specific preference nahi"
@@ -75,13 +91,16 @@ def save_preference(user_number, preference):
             "user_number": user_number,
             "preference": preference
         }).execute()
+        # Update cache
+        current = preferences_cache.get(user_number, "")
+        if current and current != "Koi specific preference nahi":
+            preferences_cache[user_number] = current + ", " + preference
+        else:
+            preferences_cache[user_number] = preference
         print(f"Saved preference: {preference}")
     except Exception as e:
         print(f"Error saving preference: {e}")
 
-# ==============================
-# COOK FORWARDING
-# ==============================
 def send_to_cook(recipe_text, user_number):
     cook_number = os.environ.get("COOK_NUMBER", "")
     if not cook_number or "XXXXXXXXXX" in cook_number:
@@ -98,13 +117,10 @@ def send_to_cook(recipe_text, user_number):
             to=cook_number,
             body=f"Lumo se aaj ka recipe:\n\n{recipe_text}"
         )
-        print(f"Recipe sent to cook: {cook_number}")
+        print(f"Recipe sent to cook")
     except Exception as e:
         print(f"Error sending to cook: {e}")
 
-# ==============================
-# HELPERS
-# ==============================
 def extract_meal_name(ai_reply):
     try:
         if "Aaj raat ke liye:" in ai_reply:
@@ -132,25 +148,23 @@ def is_preference(message):
                 "prefer", "vegetarian", "vegan", "light khana", "heavy nahi"]
     return any(t in msg for t in triggers)
 
-# ==============================
-# AI BRAIN
-# ==============================
 def get_ai_response(user_message, user_number):
     client = anthropic.Anthropic(api_key=os.environ.get("ANTHROPIC_API_KEY"))
 
     if user_number not in conversations:
         conversations[user_number] = []
 
-    # Handle reset
     if is_reset(user_message):
         conversations[user_number] = []
+        meal_history_cache.pop(user_number, None)
+        preferences_cache.pop(user_number, None)
         return "Fresh start! 🌟 Batao aaj raat kya banana chahte ho?"
 
-    # Save preference to Supabase if detected
+    # Save preference if detected (async-like — fire and use cache)
     if is_preference(user_message):
         save_preference(user_number, user_message)
 
-    # Load data from Supabase
+    # Use cached data — fast, no DB call if already loaded
     meal_history = get_meal_history(user_number)
     preferences = get_preferences(user_number)
 
@@ -177,24 +191,24 @@ Suggestion logic:
 - Protein, vegetables aur carbs ka balance maintain kar across the week
 - Weekday = quick aur light (30 min se kam)
 - Weekend = thoda elaborate chalega
-- Health benefit reason mein naturally embed kar — never say "yeh healthy hai"
+- Health benefit reason mein naturally embed kar
 
-Agar user preference set kare jaise "no paneer" ya "light khana chahiye":
-- Warmly acknowledge karo: "Noted! Aage se dhyan rakhunga 😊"
-- Phir suggestion do accordingly
+Agar user preference set kare:
+- Warmly acknowledge: "Noted! Aage se dhyan rakhunga 😊"
+- Phir suggestion do
 
-Format hamesha aisa ho:
+Format:
 "Aaj raat ke liye: [MEAL NAME] 🍽️
 [Ek line reason]
 
 Banani hai? Yes bolo ya kuch aur chahiye toh batao!"
 
-Agar user "yes" bole TABHI recipe steps do. Pehle sirf suggestion do aur wait karo.
-Agar no: ek alag suggest karo.
+Agar yes: recipe steps do.
+Agar no: alag suggest karo.
 
 Aaj ka din: {datetime.now().strftime("%A")}
-Is week ka meal history: {meal_history}
-User preferences: {preferences}"""
+Meal history: {meal_history}
+Preferences: {preferences}"""
 
     response = client.messages.create(
         model="claude-sonnet-4-5",
@@ -210,7 +224,6 @@ User preferences: {preferences}"""
         "content": ai_reply
     })
 
-    # Save meal and send to cook on exact yes
     if is_yes(user_message):
         last_suggestion = None
         for msg in reversed(conversations[user_number]):
@@ -221,13 +234,9 @@ User preferences: {preferences}"""
             meal_name = extract_meal_name(last_suggestion)
             save_meal(user_number, meal_name)
             send_to_cook(ai_reply, user_number)
-            print(f"Meal confirmed: {meal_name}")
 
     return ai_reply
 
-# ==============================
-# WEBHOOK
-# ==============================
 @app.route("/webhook", methods=["POST"])
 def webhook():
     incoming_message = request.form.get("Body", "").strip()
