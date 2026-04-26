@@ -1,5 +1,6 @@
 from flask import Flask, request
 from twilio.twiml.messaging_response import MessagingResponse
+from twilio.rest import Client as TwilioClient
 import anthropic
 import os
 from datetime import datetime, date
@@ -8,6 +9,8 @@ from supabase import create_client
 app = Flask(__name__)
 conversations = {}
 processed_messages = set()
+# Store preferences per user
+user_preferences = {}
 
 def get_supabase():
     url = os.environ.get("SUPABASE_URL")
@@ -56,17 +59,45 @@ def extract_meal_name(ai_reply):
     except:
         return "Unknown meal"
 
+def send_to_cook(recipe_text, user_number):
+    """Send recipe to cook — only if cook number is set and different from user"""
+    cook_number = os.environ.get("COOK_NUMBER", "")
+    if not cook_number or "XXXXXXXXXX" in cook_number:
+        return
+    if cook_number == user_number:
+        return
+    try:
+        client = TwilioClient(
+            os.environ.get("TWILIO_SID"),
+            os.environ.get("TWILIO_TOKEN")
+        )
+        client.messages.create(
+            from_="whatsapp:+14155238886",
+            to=cook_number,
+            body=f"Lumo se aaj ka recipe:\n\n{recipe_text}"
+        )
+        print(f"Recipe sent to cook: {cook_number}")
+    except Exception as e:
+        print(f"Error sending to cook: {e}")
+
 def is_yes(message):
-    """Strict yes detection — exact word match only"""
     msg = message.lower().strip()
     yes_words = ["yes", "haan", "theek hai", "okay", "ok",
                  "bilkul", "perfect", "bana lo", "bana do", "haan ji"]
     return msg in yes_words
 
 def is_reset(message):
-    """Detect reset request"""
     msg = message.lower().strip()
     return any(word in msg for word in ["reset", "naya shuru", "start fresh"])
+
+def is_preference(message):
+    """Detect if user is setting a preference"""
+    msg = message.lower()
+    preference_triggers = ["no ", "nahi ", "avoid", "mat banana", 
+                          "allergic", "don't", "dont", "pasand nahi",
+                          "always ", "hamesha ", "prefer", "light ",
+                          "heavy nahi", "vegetarian", "vegan"]
+    return any(trigger in msg for trigger in preference_triggers)
 
 def get_ai_response(user_message, user_number):
     client = anthropic.Anthropic(api_key=os.environ.get("ANTHROPIC_API_KEY"))
@@ -79,7 +110,16 @@ def get_ai_response(user_message, user_number):
         conversations[user_number] = []
         return "Fresh start! 🌟 Batao aaj raat kya banana chahte ho?"
 
+    # Handle preference setting
+    if is_preference(user_message):
+        if user_number not in user_preferences:
+            user_preferences[user_number] = []
+        user_preferences[user_number].append(user_message)
+        print(f"Preference saved for {user_number}: {user_message}")
+
     meal_history = get_meal_history(user_number)
+    preferences = user_preferences.get(user_number, [])
+    preferences_text = ", ".join(preferences) if preferences else "Koi specific preference nahi"
 
     conversations[user_number].append({
         "role": "user",
@@ -94,16 +134,22 @@ Tera core goal: Healthy eating ko easiest choice banana — bina health lecture 
 
 Tera style:
 - Hinglish mein baat kar
-- Short aur warm reh
+- Short aur warm reh  
 - Ek meal suggest kar, 5 options mat de
-- Friendly tone
+- Friendly tone — jaise ek close friend
 
 Suggestion logic:
 - Is week jo already ban chuka hai woh KABHI mat suggest karo: {meal_history}
-- Protein, vegetables aur carbs ka balance maintain kar
-- Weekday = quick aur light
-- Weekend = thoda elaborate
-- Health benefit naturally embed kar reason mein
+- User ki preferences hamesha follow karo: {preferences_text}
+- Protein, vegetables aur carbs ka balance maintain kar across the week
+- Weekday = quick aur light (30 min se kam)
+- Weekend = thoda elaborate chalega
+- Health benefit reason mein naturally embed kar — never say "yeh healthy hai"
+
+Agar user preference set kare jaise "no paneer" ya "light khana chahiye":
+- Acknowledge karo warmly
+- Confirm karo ki yaad rakhoge
+- Phir suggestion do accordingly
 
 Format hamesha aisa ho:
 "Aaj raat ke liye: [MEAL NAME] 🍽️
@@ -111,11 +157,12 @@ Format hamesha aisa ho:
 
 Banani hai? Yes bolo ya kuch aur chahiye toh batao!"
 
-Agar user "yes" bole TABHI recipe steps do. Pehle sirf suggestion do aur wait karo.
+Agar user "yes" bole TABHI recipe steps do cook ke liye. Pehle sirf suggestion do.
 Agar no: ek alag suggest karo.
 
 Aaj ka din: {datetime.now().strftime("%A")}
-Is week ka meal history: {meal_history}"""
+Is week ka meal history: {meal_history}
+User preferences: {preferences_text}"""
 
     response = client.messages.create(
         model="claude-sonnet-4-5",
@@ -131,7 +178,7 @@ Is week ka meal history: {meal_history}"""
         "content": ai_reply
     })
 
-    # Save meal only on exact yes
+    # Save meal and send to cook on exact yes
     if is_yes(user_message):
         last_suggestion = None
         for msg in reversed(conversations[user_number]):
@@ -141,6 +188,7 @@ Is week ka meal history: {meal_history}"""
         if last_suggestion:
             meal_name = extract_meal_name(last_suggestion)
             save_meal(user_number, meal_name)
+            send_to_cook(ai_reply, user_number)
             print(f"Meal confirmed: {meal_name}")
 
     return ai_reply
@@ -153,7 +201,6 @@ def webhook():
 
     print(f"Received: {message_sid} from {user_number}: {incoming_message}")
 
-    # Deduplicate
     if message_sid in processed_messages:
         print(f"Duplicate ignored: {message_sid}")
         resp = MessagingResponse()
