@@ -21,7 +21,10 @@ SUPABASE_KEY = os.environ.get("SUPABASE_KEY")
 # ==============================
 # SUPABASE CLIENT
 # ==============================
-supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
+def get_supabase():
+    url = os.environ.get("SUPABASE_URL")
+    key = os.environ.get("SUPABASE_KEY")
+    return create_client(url, key)
 
 # ==============================
 # CONVERSATION MEMORY
@@ -37,7 +40,7 @@ def get_meal_history(user_number):
         today = date.today()
         week_start = today.strftime("%Y-%m-%d")
 
-        result = supabase.table("meals")\
+        result = get_supabase.table("meals")\
             .select("meal_name, cooked_date")\
             .eq("user_number", user_number)\
             .eq("accepted", True)\
@@ -58,7 +61,7 @@ def get_meal_history(user_number):
 def save_meal(user_number, meal_name):
     """Save confirmed meal to Supabase"""
     try:
-        supabase.table("meals").insert({
+        get_supabase.table("meals").insert({
             "user_number": user_number,
             "meal_name": meal_name,
             "cooked_date": date.today().strftime("%Y-%m-%d"),
