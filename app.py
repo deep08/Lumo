@@ -9,14 +9,15 @@ from supabase import create_client
 app = Flask(__name__)
 conversations = {}
 processed_messages = set()
-# Store preferences per user
-user_preferences = {}
 
 def get_supabase():
     url = os.environ.get("SUPABASE_URL")
     key = os.environ.get("SUPABASE_KEY")
     return create_client(url, key)
 
+# ==============================
+# MEAL HISTORY
+# ==============================
 def get_meal_history(user_number):
     try:
         today = date.today()
@@ -49,18 +50,39 @@ def save_meal(user_number, meal_name):
     except Exception as e:
         print(f"Error saving meal: {e}")
 
-def extract_meal_name(ai_reply):
+# ==============================
+# PREFERENCES — stored in Supabase
+# ==============================
+def get_preferences(user_number):
     try:
-        if "Aaj raat ke liye:" in ai_reply:
-            part = ai_reply.split("Aaj raat ke liye:")[1]
-            meal = part.split("🍽️")[0].strip()
-            return meal
-        return "Unknown meal"
-    except:
-        return "Unknown meal"
+        db = get_supabase()
+        result = db.table("Preferences")\
+            .select("preference")\
+            .eq("user_number", user_number)\
+            .execute()
+        if result.data:
+            prefs = [row["preference"] for row in result.data]
+            return ", ".join(prefs)
+        return "Koi specific preference nahi"
+    except Exception as e:
+        print(f"Error getting preferences: {e}")
+        return "Koi specific preference nahi"
 
+def save_preference(user_number, preference):
+    try:
+        db = get_supabase()
+        db.table("Preferences").insert({
+            "user_number": user_number,
+            "preference": preference
+        }).execute()
+        print(f"Saved preference: {preference}")
+    except Exception as e:
+        print(f"Error saving preference: {e}")
+
+# ==============================
+# COOK FORWARDING
+# ==============================
 def send_to_cook(recipe_text, user_number):
-    """Send recipe to cook — only if cook number is set and different from user"""
     cook_number = os.environ.get("COOK_NUMBER", "")
     if not cook_number or "XXXXXXXXXX" in cook_number:
         return
@@ -80,6 +102,19 @@ def send_to_cook(recipe_text, user_number):
     except Exception as e:
         print(f"Error sending to cook: {e}")
 
+# ==============================
+# HELPERS
+# ==============================
+def extract_meal_name(ai_reply):
+    try:
+        if "Aaj raat ke liye:" in ai_reply:
+            part = ai_reply.split("Aaj raat ke liye:")[1]
+            meal = part.split("🍽️")[0].strip()
+            return meal
+        return "Unknown meal"
+    except:
+        return "Unknown meal"
+
 def is_yes(message):
     msg = message.lower().strip()
     yes_words = ["yes", "haan", "theek hai", "okay", "ok",
@@ -91,14 +126,15 @@ def is_reset(message):
     return any(word in msg for word in ["reset", "naya shuru", "start fresh"])
 
 def is_preference(message):
-    """Detect if user is setting a preference"""
     msg = message.lower()
-    preference_triggers = ["no ", "nahi ", "avoid", "mat banana", 
-                          "allergic", "don't", "dont", "pasand nahi",
-                          "always ", "hamesha ", "prefer", "light ",
-                          "heavy nahi", "vegetarian", "vegan"]
-    return any(trigger in msg for trigger in preference_triggers)
+    triggers = ["no ", "nahi ", "avoid", "mat banana", "allergic",
+                "don't", "dont", "pasand nahi", "always ", "hamesha ",
+                "prefer", "vegetarian", "vegan", "light khana", "heavy nahi"]
+    return any(t in msg for t in triggers)
 
+# ==============================
+# AI BRAIN
+# ==============================
 def get_ai_response(user_message, user_number):
     client = anthropic.Anthropic(api_key=os.environ.get("ANTHROPIC_API_KEY"))
 
@@ -110,16 +146,13 @@ def get_ai_response(user_message, user_number):
         conversations[user_number] = []
         return "Fresh start! 🌟 Batao aaj raat kya banana chahte ho?"
 
-    # Handle preference setting
+    # Save preference to Supabase if detected
     if is_preference(user_message):
-        if user_number not in user_preferences:
-            user_preferences[user_number] = []
-        user_preferences[user_number].append(user_message)
-        print(f"Preference saved for {user_number}: {user_message}")
+        save_preference(user_number, user_message)
 
+    # Load data from Supabase
     meal_history = get_meal_history(user_number)
-    preferences = user_preferences.get(user_number, [])
-    preferences_text = ", ".join(preferences) if preferences else "Koi specific preference nahi"
+    preferences = get_preferences(user_number)
 
     conversations[user_number].append({
         "role": "user",
@@ -134,21 +167,20 @@ Tera core goal: Healthy eating ko easiest choice banana — bina health lecture 
 
 Tera style:
 - Hinglish mein baat kar
-- Short aur warm reh  
+- Short aur warm reh
 - Ek meal suggest kar, 5 options mat de
 - Friendly tone — jaise ek close friend
 
 Suggestion logic:
 - Is week jo already ban chuka hai woh KABHI mat suggest karo: {meal_history}
-- User ki preferences hamesha follow karo: {preferences_text}
+- User ki preferences hamesha follow karo: {preferences}
 - Protein, vegetables aur carbs ka balance maintain kar across the week
 - Weekday = quick aur light (30 min se kam)
 - Weekend = thoda elaborate chalega
 - Health benefit reason mein naturally embed kar — never say "yeh healthy hai"
 
 Agar user preference set kare jaise "no paneer" ya "light khana chahiye":
-- Acknowledge karo warmly
-- Confirm karo ki yaad rakhoge
+- Warmly acknowledge karo: "Noted! Aage se dhyan rakhunga 😊"
 - Phir suggestion do accordingly
 
 Format hamesha aisa ho:
@@ -157,12 +189,12 @@ Format hamesha aisa ho:
 
 Banani hai? Yes bolo ya kuch aur chahiye toh batao!"
 
-Agar user "yes" bole TABHI recipe steps do cook ke liye. Pehle sirf suggestion do.
+Agar user "yes" bole TABHI recipe steps do. Pehle sirf suggestion do aur wait karo.
 Agar no: ek alag suggest karo.
 
 Aaj ka din: {datetime.now().strftime("%A")}
 Is week ka meal history: {meal_history}
-User preferences: {preferences_text}"""
+User preferences: {preferences}"""
 
     response = client.messages.create(
         model="claude-sonnet-4-5",
@@ -193,6 +225,9 @@ User preferences: {preferences_text}"""
 
     return ai_reply
 
+# ==============================
+# WEBHOOK
+# ==============================
 @app.route("/webhook", methods=["POST"])
 def webhook():
     incoming_message = request.form.get("Body", "").strip()
