@@ -1,8 +1,7 @@
 from flask import Flask, request
-from twilio.rest import Client as TwilioClient
+from twilio.twiml.messaging_response import MessagingResponse
 import anthropic
 import os
-import threading
 from datetime import datetime, date
 from supabase import create_client
 
@@ -57,58 +56,39 @@ def extract_meal_name(ai_reply):
     except:
         return "Unknown meal"
 
-def send_whatsapp_message(to_number, message):
-    try:
-        client = TwilioClient(
-            os.environ.get("TWILIO_SID"),
-            os.environ.get("TWILIO_TOKEN")
-        )
-        client.messages.create(
-            from_="whatsapp:+14155238886",
-            to=to_number,
-            body=message
-        )
-        print(f"Sent message to {to_number}")
-    except Exception as e:
-        print(f"Error sending message: {e}")
-
 def is_yes(message):
     """Strict yes detection — exact word match only"""
     msg = message.lower().strip()
-    yes_words = ["yes", "haan", "ha", "theek hai", "okay", "ok",
+    yes_words = ["yes", "haan", "theek hai", "okay", "ok",
                  "bilkul", "perfect", "bana lo", "bana do", "haan ji"]
     return msg in yes_words
 
 def is_reset(message):
     """Detect reset request"""
     msg = message.lower().strip()
-    reset_words = ["reset", "naya shuru", "start fresh", "clear", "naya"]
-    return any(word in msg for word in reset_words)
+    return any(word in msg for word in ["reset", "naya shuru", "start fresh"])
 
-def process_and_reply(user_message, user_number):
-    try:
-        # Handle reset
-        if is_reset(user_message):
-            conversations[user_number] = []
-            send_whatsapp_message(user_number, 
-                "Fresh start! 🌟 Batao aaj raat kya banana chahte ho?")
-            return
+def get_ai_response(user_message, user_number):
+    client = anthropic.Anthropic(api_key=os.environ.get("ANTHROPIC_API_KEY"))
 
-        client = anthropic.Anthropic(api_key=os.environ.get("ANTHROPIC_API_KEY"))
+    if user_number not in conversations:
+        conversations[user_number] = []
 
-        if user_number not in conversations:
-            conversations[user_number] = []
+    # Handle reset
+    if is_reset(user_message):
+        conversations[user_number] = []
+        return "Fresh start! 🌟 Batao aaj raat kya banana chahte ho?"
 
-        meal_history = get_meal_history(user_number)
+    meal_history = get_meal_history(user_number)
 
-        conversations[user_number].append({
-            "role": "user",
-            "content": user_message
-        })
+    conversations[user_number].append({
+        "role": "user",
+        "content": user_message
+    })
 
-        recent_history = conversations[user_number][-10:]
+    recent_history = conversations[user_number][-10:]
 
-        system = f"""Tu Lumo hai — ek friendly meal assistant jo Indian households ko decide karne mein help karta hai ki aaj raat kya banana hai.
+    system = f"""Tu Lumo hai — ek friendly meal assistant jo Indian households ko decide karne mein help karta hai ki aaj raat kya banana hai.
 
 Tera core goal: Healthy eating ko easiest choice banana — bina health lecture diye. Balanced meals suggest kar jo tasty bhi ho aur nutritious bhi, lekin kabhi "yeh healthy hai" mat bol.
 
@@ -137,47 +117,33 @@ Agar no: ek alag suggest karo.
 Aaj ka din: {datetime.now().strftime("%A")}
 Is week ka meal history: {meal_history}"""
 
-        response = client.messages.create(
-            model="claude-sonnet-4-5",
-            max_tokens=1000,
-            system=system,
-            messages=recent_history
-        )
+    response = client.messages.create(
+        model="claude-sonnet-4-5",
+        max_tokens=1000,
+        system=system,
+        messages=recent_history
+    )
 
-        ai_reply = response.content[0].text
+    ai_reply = response.content[0].text
 
-        conversations[user_number].append({
-            "role": "assistant",
-            "content": ai_reply
-        })
+    conversations[user_number].append({
+        "role": "assistant",
+        "content": ai_reply
+    })
 
-        # Send ONE reply to user
-        send_whatsapp_message(user_number, ai_reply)
+    # Save meal only on exact yes
+    if is_yes(user_message):
+        last_suggestion = None
+        for msg in reversed(conversations[user_number]):
+            if msg["role"] == "assistant" and "Aaj raat ke liye:" in msg["content"]:
+                last_suggestion = msg["content"]
+                break
+        if last_suggestion:
+            meal_name = extract_meal_name(last_suggestion)
+            save_meal(user_number, meal_name)
+            print(f"Meal confirmed: {meal_name}")
 
-        # Only save and forward if EXACT yes detected
-        if is_yes(user_message):
-            last_suggestion = None
-            for msg in reversed(conversations[user_number]):
-                if msg["role"] == "assistant" and "Aaj raat ke liye:" in msg["content"]:
-                    last_suggestion = msg["content"]
-                    break
-
-            if last_suggestion:
-                meal_name = extract_meal_name(last_suggestion)
-                save_meal(user_number, meal_name)
-                print(f"Meal confirmed: {meal_name}")
-
-                # Forward to cook only if cook number exists and is different
-                cook_number = os.environ.get("COOK_NUMBER", "")
-                if cook_number and "XXXXXXXXXX" not in cook_number and cook_number != user_number:
-                    send_whatsapp_message(
-                        cook_number,
-                        f"Lumo se aaj ka recipe:\n\n{ai_reply}"
-                    )
-
-    except Exception as e:
-        print(f"Error: {e}")
-        send_whatsapp_message(user_number, "Kuch issue aa gaya. Dobara try karo!")
+    return ai_reply
 
 @app.route("/webhook", methods=["POST"])
 def webhook():
@@ -187,22 +153,22 @@ def webhook():
 
     print(f"Received: {message_sid} from {user_number}: {incoming_message}")
 
+    # Deduplicate
     if message_sid in processed_messages:
         print(f"Duplicate ignored: {message_sid}")
-        return "", 200
+        resp = MessagingResponse()
+        return str(resp)
 
     processed_messages.add(message_sid)
     if len(processed_messages) > 100:
         processed_messages.clear()
 
-    thread = threading.Thread(
-        target=process_and_reply,
-        args=(incoming_message, user_number)
-    )
-    thread.daemon = True
-    thread.start()
+    lumo_reply = get_ai_response(incoming_message, user_number)
+    print(f"Lumo replies: {lumo_reply}")
 
-    return "", 200
+    resp = MessagingResponse()
+    resp.message(lumo_reply)
+    return str(resp)
 
 @app.route("/", methods=["GET"])
 def home():
