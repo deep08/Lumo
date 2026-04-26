@@ -162,11 +162,11 @@ def webhook():
     print(f"Message from {user_number}: {incoming_message}")
     lumo_reply = get_ai_response(incoming_message, user_number)
     
-    # Send via Twilio API directly
+    # Send reply via Twilio API
     send_whatsapp_message(user_number, lumo_reply)
     
-    # Return EMPTY response to Twilio — no message here
-    return "", 204
+    # Return empty TwiML — tells Twilio "received, no reply needed"
+    return '<?xml version="1.0" encoding="UTF-8"?><Response></Response>', 200, {"Content-Type": "text/xml"}
 
 @app.route("/", methods=["GET"])
 def home():
