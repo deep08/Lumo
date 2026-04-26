@@ -1,5 +1,4 @@
 from flask import Flask, request
-from twilio.twiml.messaging_response import MessagingResponse
 from twilio.rest import Client as TwilioClient
 import anthropic
 import os
@@ -19,7 +18,7 @@ def get_meal_history(user_number):
         today = date.today()
         week_start = today.strftime("%Y-%m-%d")
         db = get_supabase()
-        result = db.table("meals")\
+        result = db.table("Meals")\
             .select("meal_name")\
             .eq("user_number", user_number)\
             .eq("accepted", True)\
@@ -36,7 +35,7 @@ def get_meal_history(user_number):
 def save_meal(user_number, meal_name):
     try:
         db = get_supabase()
-        db.table("meals").insert({
+        db.table("Meals").insert({
             "user_number": user_number,
             "meal_name": meal_name,
             "cooked_date": date.today().strftime("%Y-%m-%d"),
@@ -110,7 +109,7 @@ Format hamesha aisa ho:
 Banani hai? Yes bolo ya kuch aur chahiye toh batao!"
 
 Agar user "yes" bole TABHI recipe steps do. Pehle sirf suggestion do aur wait karo.
-Agar no: alag suggest karo.
+Agar no: ek alag suggest karo.
 
 Aaj ka din: {datetime.now().strftime("%A")}
 Is week ka meal history: {meal_history}"""
@@ -152,11 +151,9 @@ def webhook():
     lumo_reply = get_ai_response(incoming_message, user_number)
     print(f"Lumo replies: {lumo_reply}")
 
-    # Send reply via Twilio API
     send_whatsapp_message(user_number, lumo_reply)
 
-    # Return empty TwiML so Twilio doesn't send a second message
-     return '<?xml version="1.0" encoding="UTF-8"?><Response></Response>', 200, {"Content-Type": "text/xml"}
+    return ""
 
 @app.route("/", methods=["GET"])
 def home():
