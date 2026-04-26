@@ -72,8 +72,28 @@ def send_whatsapp_message(to_number, message):
     except Exception as e:
         print(f"Error sending message: {e}")
 
+def is_yes(message):
+    """Strict yes detection — exact word match only"""
+    msg = message.lower().strip()
+    yes_words = ["yes", "haan", "ha", "theek hai", "okay", "ok",
+                 "bilkul", "perfect", "bana lo", "bana do", "haan ji"]
+    return msg in yes_words
+
+def is_reset(message):
+    """Detect reset request"""
+    msg = message.lower().strip()
+    reset_words = ["reset", "naya shuru", "start fresh", "clear", "naya"]
+    return any(word in msg for word in reset_words)
+
 def process_and_reply(user_message, user_number):
     try:
+        # Handle reset
+        if is_reset(user_message):
+            conversations[user_number] = []
+            send_whatsapp_message(user_number, 
+                "Fresh start! 🌟 Batao aaj raat kya banana chahte ho?")
+            return
+
         client = anthropic.Anthropic(api_key=os.environ.get("ANTHROPIC_API_KEY"))
 
         if user_number not in conversations:
@@ -134,13 +154,8 @@ Is week ka meal history: {meal_history}"""
         # Send ONE reply to user
         send_whatsapp_message(user_number, ai_reply)
 
-        # Check if user confirmed a meal
-        yes_words = ["yes", "haan", "ha", "theek", "okay", "ok",
-                     "bilkul", "haan ji", "perfect", "bana lo", "bana do"]
-        user_said_yes = any(word in user_message.lower() for word in yes_words)
-
-        if user_said_yes:
-            # Find last suggestion
+        # Only save and forward if EXACT yes detected
+        if is_yes(user_message):
             last_suggestion = None
             for msg in reversed(conversations[user_number]):
                 if msg["role"] == "assistant" and "Aaj raat ke liye:" in msg["content"]:
@@ -150,10 +165,11 @@ Is week ka meal history: {meal_history}"""
             if last_suggestion:
                 meal_name = extract_meal_name(last_suggestion)
                 save_meal(user_number, meal_name)
+                print(f"Meal confirmed: {meal_name}")
 
-                # Forward to cook ONLY if cook number is set
+                # Forward to cook only if cook number exists and is different
                 cook_number = os.environ.get("COOK_NUMBER", "")
-                if cook_number and "XXXXXXXXXX" not in cook_number:
+                if cook_number and "XXXXXXXXXX" not in cook_number and cook_number != user_number:
                     send_whatsapp_message(
                         cook_number,
                         f"Lumo se aaj ka recipe:\n\n{ai_reply}"
@@ -171,7 +187,6 @@ def webhook():
 
     print(f"Received: {message_sid} from {user_number}: {incoming_message}")
 
-    # Deduplicate using MessageSid
     if message_sid in processed_messages:
         print(f"Duplicate ignored: {message_sid}")
         return "", 200
@@ -180,7 +195,6 @@ def webhook():
     if len(processed_messages) > 100:
         processed_messages.clear()
 
-    # Process in background — respond to Twilio instantly
     thread = threading.Thread(
         target=process_and_reply,
         args=(incoming_message, user_number)
