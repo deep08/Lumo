@@ -158,20 +158,15 @@ Is week ka meal history: {meal_history}"""
 def webhook():
     incoming_message = request.form.get("Body", "").strip()
     user_number = request.form.get("From", "")
-
+    
     print(f"Message from {user_number}: {incoming_message}")
-
-    # Start processing in background thread
-    thread = threading.Thread(
-        target=process_message,
-        args=(incoming_message, user_number)
-    )
-    thread.start()
-
-    # Return empty response to Twilio IMMEDIATELY
-    # This prevents Twilio from retrying and sending duplicate messages
-    response = MessagingResponse()
-    return str(response), 200, {"Content-Type": "text/xml"}
+    lumo_reply = get_ai_response(incoming_message, user_number)
+    
+    # Send via Twilio API directly
+    send_whatsapp_message(user_number, lumo_reply)
+    
+    # Return EMPTY response to Twilio — no message here
+    return "", 204
 
 @app.route("/", methods=["GET"])
 def home():
