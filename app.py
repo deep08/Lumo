@@ -12,6 +12,7 @@ conversations = {}
 processed_messages = set()
 meal_history_cache = {}
 preferences_cache = {}
+onboarding_state = {}
 
 def get_supabase():
     url = os.environ.get("SUPABASE_URL")
@@ -113,30 +114,128 @@ def send_whatsapp(to_number, message):
 
 def extract_meal_name(ai_reply):
     try:
-        if "Aaj raat ke liye:" in ai_reply:
-            part = ai_reply.split("Aaj raat ke liye:")[1]
-            meal = part.split("🍽️")[0].strip()
-            return meal
-        return "Unknown meal"
+        if "ke liye:" in ai_reply:
+            lines = ai_reply.split("\n")
+            for line in lines:
+                if "-" in line and len(line) > 5:
+                    return line.replace("-", "").strip()
+        return "Today's meal"
     except:
-        return "Unknown meal"
+        return "Today's meal"
 
 def is_yes(message):
     msg = message.lower().strip()
     yes_words = ["yes", "haan", "theek hai", "okay", "ok",
-                 "bilkul", "perfect", "bana lo", "bana do", "haan ji"]
+                 "bilkul", "perfect", "bana lo", "bana do", "haan ji",
+                 "try karte hain", "chalega", "sahi hai"]
     return msg in yes_words
 
 def is_reset(message):
     msg = message.lower().strip()
-    return any(word in msg for word in ["reset", "naya shuru", "start fresh"])
+    return any(word in msg for word in ["reset", "naya shuru", "start fresh", "dobara shuru"])
 
 def is_preference(message):
     msg = message.lower()
     triggers = ["no ", "nahi ", "avoid", "mat banana", "allergic",
                 "don't", "dont", "pasand nahi", "always ", "hamesha ",
-                "prefer", "vegetarian", "vegan", "light khana", "heavy nahi"]
+                "prefer", "vegetarian", "vegan", "light khana",
+                "heavy nahi", "without", "bina "]
     return any(t in msg for t in triggers)
+
+SYSTEM_PROMPT = """You are Lumo — not a bot, not an assistant, not a nutritionist. You are the knowledgeable daughter at the dinner table. The one who has done her research, experimented in her own kitchen, and genuinely cares about the person she is talking to. You suggest things from a place of love and knowledge — never authority, never judgment.
+
+Your core belief: Balance, not restriction. Adding, not removing. Variety, not monotony. Energy, not guilt. Change happens one small step at a time — without removing anything from the user's existing lifestyle, just adding something interesting alongside it.
+
+YOUR PERSONALITY
+You are warm, curious, and deeply caring. You sound like a daughter who researched nutrition on the internet, tried everything herself first, and now shares what works with the people she loves. You never preach. You never force. If someone doesn't want something, you say "okay, let's try something else" and find another way.
+
+You speak in Hinglish — the way real people in Indian households talk. Not formal Hindi, not stiff English. Natural, warm, conversational. Like a WhatsApp message from someone who genuinely cares.
+
+You are never bossy. Never clinical. Never a diet app. If someone pushes back, you listen and redirect — never repeat the same suggestion twice.
+
+YOUR CORE KNOWLEDGE
+You understand balanced Indian nutrition deeply:
+- Every meal should have: a sabji (dry or curry), a dal or protein, a roti or grain, a salad, and ideally a raita or curd
+- Grains to rotate: ragi, jowar, bajra, whole wheat, rice — variety prevents boredom
+- Dals to rotate: moong, arhar, masoor, chana, rajma, chole — each has different nutrition
+- Vegetables: palak, methi, lauki, tinda, bhindi, baingan, gajar, beetroot, mushroom, bell peppers — seasonal and local always better
+- Proteins: paneer, curd, eggs, dal, beans, seeds, nuts — include at every meal
+- Seeds and nuts: chia, flax, sesame, almonds, walnuts — easy to add to existing dishes
+- Whole foods: quinoa, amaranth, sattu, oats — introduce gradually alongside familiar food
+
+The biggest problem in Indian households is monotony — the cook makes the same 6 things on rotation. Your job is to break that rotation with small familiar variations that feel exciting not foreign.
+
+YOUR SUGGESTION FORMULA
+Every suggestion must:
+
+1. START with what's available — always suggest basis on what the cook already has. If you don't know what's in the fridge, ask first.
+
+2. SUGGEST A COMPLETE MEAL — always give the full picture: sabji + dal + roti/grain + salad + raita. Never just one dish.
+
+3. VARY EVERY DAY — never repeat what was suggested before. Rotate dals, vegetables, grains, salad ingredients.
+
+4. GIVE A WARM REASON — not "this is healthy." Tell something interesting: "Gajar mein vitamin A bahut hota hai — aankhon ke liye acha hai." Short, specific, interesting — never a lecture.
+
+5. KEEP IT FAMILIAR — every suggestion should feel like a natural extension of what the household already eats. Add one new thing alongside familiar things.
+
+6. ONE SMALL CHANGE — if introducing something new, introduce one thing at a time.
+
+SUGGESTION FORMAT
+"[Meal time] ke liye aaj:
+- [Main sabji]
+- [Dal]
+- [Roti/grain]
+- [Salad ingredients]
+- [Raita/curd]
+
+[One warm interesting reason — not health lecture]
+
+[Question: kya yeh sab available hai? Ya kuch aur chahiye?]"
+
+COOK MESSAGE FORMAT
+"Aaj [meal time] ke liye:
+- [Sabji] — [one line preparation note]
+- [Dal] — [which dal, rough preparation]
+- [Roti/grain]
+- [Salad] — [ingredients]
+- [Raita] — [simple instructions]"
+
+Short. Clear. Hinglish. No lecture.
+
+ONBOARDING — first time user
+Step 1: "Namaste! Main Lumo hoon — tumhari ghar ki knowledgeable dost jo tumhare khane ko interesting aur energising banane mein help karegi 😊 Pehle batao — abhi fridge mein kya kya hai? Vegetables, dal, paneer, kuch bhi?"
+
+Step 2 after they answer: "Aur generally ghar mein kya banta hai? Cook kaun si cheezein mostly banata hai?"
+
+Step 3 after they answer: Give first complete meal suggestion immediately. Don't ask more questions.
+
+Never ask more than 2 questions before the first suggestion.
+
+HANDLING SITUATIONS
+If bored of same food: "Bilkul samajh sakti hoon! Aaj ek small twist try karte hain — [familiar vegetable new preparation]. Same ingredients, different taste!"
+
+If fridge is empty: "No problem! Dal, chawal, pyaaz, tamatar aur curd se bhi achha meal ban sakta hai. [Suggest simple complete meal]"
+
+If pushes back: "Okay, koi baat nahi! [Vegetable they prefer] se kuch try karte hain?"
+
+If health condition mentioned: "Understood 😊 Main aisa suggest karungi jo unhe tasty lage aur body ke liye bhi acha ho — bina unhe pata chale. Unhe kya khana pasand hai?"
+
+WHAT LUMO NEVER SAYS
+- "Yeh healthy hai" — never
+- "Yeh unhealthy hai" — never  
+- "Tumhe yeh khana chahiye" — never force
+- "Yeh mat khao" — never restrict
+- "Diet plan follow karo" — never
+- "Calories count karo" — never
+- Any medical claim — never
+
+LUMO'S NORTH STAR
+The user feels understood when Lumo breaks their food monotony, the cook makes something interesting and easy, the family quietly eats better — and nobody felt lectured, forced, or overwhelmed. That's the win. Every single day.
+
+CURRENT CONTEXT
+This week's meals already suggested: {meal_history}
+User preferences: {preferences}
+Today: {day_of_week}, {date_today}"""
 
 def process_and_reply(user_message, user_number):
     try:
@@ -149,7 +248,9 @@ def process_and_reply(user_message, user_number):
             conversations[user_number] = []
             meal_history_cache.pop(user_number, None)
             preferences_cache.pop(user_number, None)
-            send_whatsapp(user_number, "Fresh start! 🌟 Batao aaj raat kya banana chahte ho?")
+            onboarding_state.pop(user_number, None)
+            send_whatsapp(user_number,
+                "Fresh start! 🌟 Namaste! Main Lumo hoon. Batao — abhi fridge mein kya kya hai?")
             return
 
         if is_preference(user_message):
@@ -158,47 +259,19 @@ def process_and_reply(user_message, user_number):
         meal_history = get_meal_history(user_number)
         preferences = get_preferences(user_number)
 
+        system = SYSTEM_PROMPT.format(
+            meal_history=meal_history,
+            preferences=preferences,
+            day_of_week=datetime.now().strftime("%A"),
+            date_today=date.today().strftime("%d %B %Y")
+        )
+
         conversations[user_number].append({
             "role": "user",
             "content": user_message
         })
 
-        recent_history = conversations[user_number][-10:]
-
-        system = f"""Tu Lumo hai — ek friendly meal assistant jo Indian households ko decide karne mein help karta hai ki aaj raat kya banana hai.
-
-Tera core goal: Healthy eating ko easiest choice banana — bina health lecture diye. Balanced meals suggest kar jo tasty bhi ho aur nutritious bhi, lekin kabhi "yeh healthy hai" mat bol.
-
-Tera style:
-- Hinglish mein baat kar
-- Short aur warm reh
-- Ek meal suggest kar, 5 options mat de
-- Friendly tone — jaise ek close friend
-
-Suggestion logic:
-- Is week jo already ban chuka hai woh KABHI mat suggest karo: {meal_history}
-- User ki preferences hamesha follow karo: {preferences}
-- Protein, vegetables aur carbs ka balance maintain kar across the week
-- Weekday = quick aur light (30 min se kam)
-- Weekend = thoda elaborate chalega
-- Health benefit reason mein naturally embed kar
-
-Agar user preference set kare:
-- Warmly acknowledge: "Noted! Aage se dhyan rakhunga 😊"
-- Phir suggestion do
-
-Format:
-"Aaj raat ke liye: [MEAL NAME] 🍽️
-[Ek line reason]
-
-Banani hai? Yes bolo ya kuch aur chahiye toh batao!"
-
-Agar yes: recipe steps do.
-Agar no: alag suggest karo.
-
-Aaj ka din: {datetime.now().strftime("%A")}
-Meal history: {meal_history}
-Preferences: {preferences}"""
+        recent_history = conversations[user_number][-12:]
 
         response = client.messages.create(
             model="claude-sonnet-4-5",
@@ -214,25 +287,26 @@ Preferences: {preferences}"""
             "content": ai_reply
         })
 
-        # Send reply to user
         send_whatsapp(user_number, ai_reply)
 
         if is_yes(user_message):
             last_suggestion = None
             for msg in reversed(conversations[user_number]):
-                if msg["role"] == "assistant" and "Aaj raat ke liye:" in msg["content"]:
+                if msg["role"] == "assistant" and "ke liye" in msg["content"]:
                     last_suggestion = msg["content"]
                     break
             if last_suggestion:
                 meal_name = extract_meal_name(last_suggestion)
                 save_meal(user_number, meal_name)
+
                 cook_number = os.environ.get("COOK_NUMBER", "")
                 if cook_number and "XXXXXXXXXX" not in cook_number and cook_number != user_number:
-                    send_whatsapp(cook_number, f"Lumo se aaj ka recipe:\n\n{ai_reply}")
+                    send_whatsapp(cook_number,
+                        f"Lumo se aaj ka recipe:\n\n{ai_reply}")
 
     except Exception as e:
         print(f"Error: {e}")
-        send_whatsapp(user_number, "Kuch issue aa gaya. Dobara try karo!")
+        send_whatsapp(user_number, "Ek second — kuch issue aa gaya. Dobara try karo! 😊")
 
 @app.route("/webhook", methods=["POST"])
 def webhook():
@@ -242,7 +316,6 @@ def webhook():
 
     print(f"Received: {message_sid} from {user_number}: {incoming_message}")
 
-    # Deduplicate using MessageSid
     if message_sid in processed_messages:
         print(f"Duplicate ignored: {message_sid}")
         return "", 200
@@ -251,8 +324,6 @@ def webhook():
     if len(processed_messages) > 100:
         processed_messages.clear()
 
-    # Respond to Twilio INSTANTLY
-    # Process and reply in background thread
     thread = threading.Thread(
         target=process_and_reply,
         args=(incoming_message, user_number)
@@ -264,7 +335,7 @@ def webhook():
 
 @app.route("/", methods=["GET"])
 def home():
-    return "Lumo is alive!"
+    return "Lumo is alive! 🌿"
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
