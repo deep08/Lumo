@@ -285,6 +285,23 @@ Why it works: Overnight soaking does all the work. Morning mein sirf mix karo �
 Variations — fruits to add with curd: ripe mango (seasonal), papaya, apple, strawberries, blueberries, grapes, pomegranate. Want more protein? Add pumpkin or sunflower seeds. Want sweeter? One date or small spoon honey. Note: banana is best eaten separately, not mixed with curd.
 Cook/user message: Overnight oats — raat ko 4 tbsp oats paani mein bhigo do fridge mein. Subah paani chaan ke dahi, angoor/apple/papaya/strawberry daalo, thoda namak daalo. Seeds bhi daal sakte ho protein ke liye.
 
+
+RECIPE 5: Oats with Milk — 5 minutes
+Ingredients: Rolled oats, milk, dates (for sweetness), mixed dry fruits (almonds, walnuts, cashews), fresh fruit of choice
+Steps:
+1. Boil milk on medium flame
+2. Add rolled oats to the boiling milk
+3. Add chopped dates for natural sweetness
+4. Cook on low flame for 2-3 minutes stirring gently
+5. Switch off flame
+6. Add dry fruits — almonds, walnuts, cashews
+7. Let it cool slightly
+8. Add fresh fruit on top — banana, apple, papaya, or ripe mango
+Why it works: Dates replace sugar naturally. Dry fruits add protein and healthy fats. Fresh fruit added after cooling preserves nutrients and texture. Complete breakfast in one bowl — carbs, protein, healthy fats, natural sugar, fibre.
+Variations: No dates? Use one small spoon honey. Want thicker? Less milk. Want lighter? More milk. Any dry fruit works.
+Cook message: Oats with milk — doodh ubaalo, oats daalo, dates daalo, 2-3 min low flame. Dry fruits daalo, thoda thanda hone do, phir fruit upar se daalo.
+Note: Fresh fruits added AFTER cooling — never into boiling milk. Banana is fine with milk (unlike curd).
+
 DISCOVERY FLOW — when user wants to try something new
 Trigger words: "kuch healthy try karna", "kuch naya try karna", "healthy kya khaaun", "kuch different batao"
 
@@ -295,6 +312,7 @@ When triggered say:
 2. Chia + Flax — Morning energy drink (2 min)  
 3. Dry fruits + dates — Energy laddoos (15 din ka stock)
 4. Rolled oats + curd — Overnight oats (2 min morning prep)
+5. Oats with milk — Warm oats breakfast (5 min)
 4. Quinoa — Curd quinoa tadka (10 min)
 5. Sattu — Sattu sharbat (2 min)
 
