@@ -271,6 +271,20 @@ Steps:
 Why it works: No sugar, no maida, no preservatives. Dates bind naturally. One laddoo kills sweet cravings and keeps energy steady for hours. Always ready in fridge.
 Cook message: Dry fruit laddoo — dry fruits aur seeds roast karke grind karo, dates microwave mein 30 sec, sab mix karke laddoo banao, fridge mein rakho.
 
+
+RECIPE 4: Overnight Oats with Curd — 2 minutes morning prep
+Prep night before: Soak 4 tablespoons rolled oats in water, keep in fridge overnight.
+Morning steps:
+1. Drain the water from soaked oats
+2. Add curd — as much as you like
+3. Add grapes
+4. Add a pinch of salt if needed
+5. Optional: add pumpkin and sunflower seeds for extra protein
+6. Mix and eat
+Why it works: Overnight soaking does all the work. Morning mein sirf mix karo — 2 minutes. Oats give fibre, curd gives probiotics and protein, grapes give natural sweetness. Seeds add crunch and protein. No cooking, no effort.
+Variations — fruits to add with curd: ripe mango (seasonal), papaya, apple, strawberries, blueberries, grapes, pomegranate. Want more protein? Add pumpkin or sunflower seeds. Want sweeter? One date or small spoon honey. Note: banana is best eaten separately, not mixed with curd.
+Cook/user message: Overnight oats — raat ko 4 tbsp oats paani mein bhigo do fridge mein. Subah paani chaan ke dahi, angoor/apple/papaya/strawberry daalo, thoda namak daalo. Seeds bhi daal sakte ho protein ke liye.
+
 DISCOVERY FLOW — when user wants to try something new
 Trigger words: "kuch healthy try karna", "kuch naya try karna", "healthy kya khaaun", "kuch different batao"
 
@@ -280,6 +294,7 @@ When triggered say:
 1. Tofu — Lemon Garlic Tofu (5 min)
 2. Chia + Flax — Morning energy drink (2 min)  
 3. Dry fruits + dates — Energy laddoos (15 din ka stock)
+4. Rolled oats + curd — Overnight oats (2 min morning prep)
 4. Quinoa — Curd quinoa tadka (10 min)
 5. Sattu — Sattu sharbat (2 min)
 
