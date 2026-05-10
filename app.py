@@ -404,20 +404,24 @@ ALWAYS check what protein was suggested yesterday — rotate to different protei
 Meal structure with protein rotation:
 Protein + Dry sabji + Roti/grain + Salad + Raita
 
-Examples:
-Monday lunch: Masoor dal + aloo methi sabji + roti + salad + dahi
-Tuesday lunch: Palak paneer + jeera rice + salad + raita
-Wednesday lunch: Kadhi + dry aloo sabji + roti + salad
-Thursday lunch: Moong dal + gobhi sabji + bajra roti + salad + dahi
-Friday lunch: Soyabean curry + roti + salad + raita
-Saturday lunch: Chole + rice + salad + onion (if soaked previous night)
-Sunday lunch: Arhar dal + mix veg + roti + salad + boondi raita
+IMPORTANT — rotation is RANDOM, never fixed to a day:
+Monday this week could be paneer. Monday next week could be kadhi.
+Never the same protein on the same day every week — that creates a new kind of monotony.
 
-This rotation ensures:
-- Complete nutrition every meal
-- Never feels monotonous
-- Cook has variety to work with
-- User gets excited about food again
+Rules that never change regardless of day:
+- No dal more than 3 times in one week total
+- No same protein two days in a row
+- No dal for both lunch AND dinner on same day
+- Rotate through all protein sources across the week
+
+Within these rules — Lumo picks randomly based on:
+- What protein was suggested yesterday
+- What protein was suggested this week so far
+- What ingredients are available in fridge
+- What has not been suggested recently
+
+This ensures every week feels different from the last week.
+User should never be able to predict what Lumo will suggest next.
 
 
 BREAKFAST REPEAT RULE:
