@@ -13,6 +13,7 @@ processed_messages = set()
 meal_history_cache = {}
 preferences_cache = {}
 onboarding_state = {}
+fridge_cache = {}
 
 def get_supabase():
     url = os.environ.get("SUPABASE_URL")
@@ -96,6 +97,38 @@ def save_preference(user_number, preference):
         print(f"Saved preference: {preference}")
     except Exception as e:
         print(f"Error saving preference: {e}")
+
+
+def get_fridge(user_number):
+    """Load fridge contents from cache or Supabase"""
+    if user_number in fridge_cache:
+        return fridge_cache[user_number]
+    try:
+        db = get_supabase()
+        result = db.table("Fridge")            .select("ingredients")            .eq("user_number", user_number)            .execute()
+        if result.data:
+            ingredients = result.data[0]["ingredients"]
+            fridge_cache[user_number] = ingredients
+            return ingredients
+        return None
+    except Exception as e:
+        print(f"Error getting fridge: {e}")
+        return None
+
+def save_fridge(user_number, ingredients):
+    """Save fridge contents to Supabase"""
+    try:
+        db = get_supabase()
+        # Upsert — update if exists, insert if not
+        db.table("Fridge").upsert({
+            "user_number": user_number,
+            "ingredients": ingredients,
+            "updated_at": datetime.now().isoformat()
+        }).execute()
+        fridge_cache[user_number] = ingredients
+        print(f"Saved fridge for {user_number}: {ingredients}")
+    except Exception as e:
+        print(f"Error saving fridge: {e}")
 
 def send_whatsapp(to_number, message):
     try:
@@ -251,6 +284,19 @@ BAD questions — these put decision burden back on user:
 - "Kya suggest karun?" — Lumo should already know
 
 The test for any question: Does it help Lumo give a better suggestion? Good. Does it ask the user to make the decision Lumo should make? Bad.
+
+
+
+FRIDGE MEMORY RULE:
+Before asking about fridge contents — always check the conversation history first.
+If user already mentioned fridge contents earlier in this conversation — use that information. Do NOT ask again.
+Only ask about fridge if:
+1. This is the very first message from user, OR
+2. User explicitly says they went shopping or fridge contents changed
+
+If user says "same fridge hai" or "kuch naya nahi aaya" — use previously mentioned ingredients.
+If conversation history has fridge contents — reference them naturally:
+"Tumne bataya tha ki palak, dal, paneer hai — ussi se suggest karti hoon 😊"
 
 
 STRICT INGREDIENT RULE — most important rule in the entire prompt
@@ -569,7 +615,8 @@ The user feels understood when Lumo breaks their food monotony, the cook makes s
 CURRENT CONTEXT
 This week's meals already suggested: {meal_history}
 User preferences: {preferences}
-Today: {day_of_week}, {date_today}"""
+Today: {day_of_week}, {date_today}
+Fridge contents user shared: {fridge_contents}"""
 
 def process_and_reply(user_message, user_number):
     try:
@@ -590,12 +637,22 @@ def process_and_reply(user_message, user_number):
         if is_preference(user_message):
             save_preference(user_number, user_message)
 
+        # Detect fridge contents — save when user mentions vegetables/ingredients
+        fridge_keywords = ["fridge mein", "ghar mein", "hai mere paas", "available hai",
+                          "palak", "paneer", "dal", "aloo", "tamatar", "pyaaz",
+                          "gobhi", "bhindi", "methi", "lauki", "tinda", "baingan",
+                          "gajar", "beetroot", "mushroom", "tofu", "rajma", "chhole"]
+        if any(keyword in user_message.lower() for keyword in fridge_keywords):
+            save_fridge(user_number, user_message)
+
         meal_history = get_meal_history(user_number)
         preferences = get_preferences(user_number)
+        fridge_contents = get_fridge(user_number)
 
         system = SYSTEM_PROMPT.format(
             meal_history=meal_history,
             preferences=preferences,
+            fridge_contents=fridge_contents if fridge_contents else "Not yet told",
             day_of_week=datetime.now().strftime("%A"),
             date_today=date.today().strftime("%d %B %Y")
         )
