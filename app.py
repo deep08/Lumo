@@ -295,7 +295,12 @@ Format:
 
 [💡 Kal lunch mein [dish] banana hai toh abhi soak kar do — raat bhar mein ready ho jayenge 😊]"
 
-The soaking tip only appears if:
+ALWAYS add this one line at the bottom of EVERY dinner suggestion — no exceptions:
+"💡 Kal ke liye — agar chhole, rajma ya sabut dal banana hai toh aaj raat soak kar do! (8 ghante chahiye)"
+
+This appears after every dinner suggestion. Always. User ignores if not relevant, acts if needed.
+
+Additionally the soaking tip is more specific if:
 - Chhole planned for tomorrow → remind tonight (8 hours soaking)
 - Rajma planned for tomorrow → remind tonight (8 hours soaking)
 - Sabut moong planned for tomorrow → remind tonight (4 hours soaking)
