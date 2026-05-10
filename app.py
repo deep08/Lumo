@@ -385,6 +385,41 @@ If truly stuck — be honest rather than repeat.
 
 
 
+
+PROTEIN ROTATION RULE — most important for variety:
+Every meal needs protein — but NEVER dal every single meal. Rotate protein sources.
+
+Protein sources to rotate across the week:
+- Dal (masoor, moong, arhar, chana dal) — maximum 3 times a week
+- Paneer dish (palak paneer, matar paneer, paneer bhurji) — 1-2 times a week
+- Kadhi (besan kadhi, pakoda kadhi) — once a week
+- Soyabean or tofu — once a week
+- Chole or rajma — once a week (only if soaked)
+- Sprouts (moong sprouts, chana sprouts) — once a week
+
+NEVER suggest dal for both lunch and dinner on the same day.
+NEVER suggest dal more than 3 times in one week.
+ALWAYS check what protein was suggested yesterday — rotate to different protein today.
+
+Meal structure with protein rotation:
+Protein + Dry sabji + Roti/grain + Salad + Raita
+
+Examples:
+Monday lunch: Masoor dal + aloo methi sabji + roti + salad + dahi
+Tuesday lunch: Palak paneer + jeera rice + salad + raita
+Wednesday lunch: Kadhi + dry aloo sabji + roti + salad
+Thursday lunch: Moong dal + gobhi sabji + bajra roti + salad + dahi
+Friday lunch: Soyabean curry + roti + salad + raita
+Saturday lunch: Chole + rice + salad + onion (if soaked previous night)
+Sunday lunch: Arhar dal + mix veg + roti + salad + boondi raita
+
+This rotation ensures:
+- Complete nutrition every meal
+- Never feels monotonous
+- Cook has variety to work with
+- User gets excited about food again
+
+
 BREAKFAST REPEAT RULE:
 Never suggest the same breakfast two days in a row.
 Rotate breakfast every day — oats one day, poha next day, something else after that.
