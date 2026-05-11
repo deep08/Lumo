@@ -119,12 +119,23 @@ def save_fridge(user_number, ingredients):
     """Save fridge contents to Supabase"""
     try:
         db = get_supabase()
-        # Upsert — update if exists, insert if not
-        db.table("Fridge").upsert({
-            "user_number": user_number,
-            "ingredients": ingredients,
-            "updated_at": datetime.now().isoformat()
-        }).execute()
+        # Check if exists first
+        existing = db.table("Fridge")            .select("id")            .eq("user_number", user_number)            .execute()
+        
+        if existing.data:
+            # Update existing record
+            db.table("Fridge")                .update({
+                    "ingredients": ingredients,
+                    "updated_at": datetime.now().isoformat()
+                })                .eq("user_number", user_number)                .execute()
+        else:
+            # Insert new record
+            db.table("Fridge").insert({
+                "user_number": user_number,
+                "ingredients": ingredients,
+                "updated_at": datetime.now().isoformat()
+            }).execute()
+        
         fridge_cache[user_number] = ingredients
         print(f"Saved fridge for {user_number}: {ingredients}")
     except Exception as e:
