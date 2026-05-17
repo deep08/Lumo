@@ -989,12 +989,12 @@ VEGETABLE PREPARATIONS:
 Tori/Ridge gourd:
 - Tori sabji dry (simple)
 - Tori curry (with tomato onion gravy)
+- Tori aloo sabji 
 
 Lauki/Bottle gourd:
 - Lauki sabji dry
 - Lauki curry
 - Lauki raita (grated raw in curd)
-- Lauki soup
 
 Bhindi/Okra:
 - Bhindi dry (crispy)
@@ -1006,13 +1006,11 @@ Baingan/Brinjal:
 - Baingan bharta (roasted)
 - Baingan curry
 - Stuffed baingan
-- Baingan raita
 
 Gobhi/Cauliflower:
 - Aloo gobhi dry
 - Gobhi matar dry
 - Gobhi paratha
-- Gobhi soup
 - Gobhi manchurian (simple)
 
 Aloo/Potato:
@@ -1090,25 +1088,20 @@ DAL PREPARATIONS:
 
 Masoor dal:
 - Masoor dal tadka
-- Masoor dal soup
 - Masoor palak dal
-- Masoor dal khichdi
 
 Moong dal:
 - Moong dal tadka
-- Moong dal khichdi
 - Moong dal chilla (breakfast)
 - Moong dal soup
 - Moong sprouts salad (raw)
 
 Arhar/Toor dal:
 - Arhar dal tadka
-- Sambar (South Indian)
 - Arhar dal with vegetables
 
 Chana dal:
 - Chana dal tadka
-- Chana dal khichdi
 - Dal baati (occasional)
 
 Rajma: (needs overnight soaking)
