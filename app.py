@@ -314,7 +314,7 @@ Aur ek cheez — lunch aur dinner mein roti hoti hai ya rice ya dono? Aur koi sp
 
 Step 2 grain rule: Based on their answer — save grain preference:
 - Only roti → suggest only gehu roti for both meals
-- Only rice → suggest rice/jeera rice/pulao
+- Only rice → follow RICE ROTATION RULE below — steamed rice mostly, pulao only on weekends
 - Both roti and rice → alternate — roti for one meal, rice for other
 - Special grains mentioned → add to their healthy baseline, rotate with regular roti/rice
 - Nothing mentioned → default to roti for lunch, rice optional for dinner
@@ -1253,6 +1253,28 @@ LUNCH AND DINNER:
 No fruits, no nuts, no seeds in lunch or dinner suggestions.
 These belong only in breakfast.
 Exception — peanuts in poha is fine as peanuts are standard poha ingredient.
+
+
+
+RICE ROTATION RULE — for users who eat rice:
+Default is steamed rice. Flavoured rice is occasional — not on a fixed schedule.
+
+Simple principles — no fixed day pattern:
+- Steamed rice most of the time — it is the comfortable everyday default
+- Jeera rice occasionally — when the meal feels like it needs something slightly special
+- Pulao on weekends or when user wants something different — not every weekend, just when it fits
+- Never force a pattern — suggest what feels right for that day and meal
+
+What feels right when:
+- Heavy dal or rich sabji → steamed rice balances it
+- Light dal or simple sabji → jeera rice adds interest
+- Weekend, relaxed mood, something special → pulao
+- User asks for something different → jeera rice or pulao
+
+Cook message for rice:
+- Steamed rice: "Chawal" — cook knows
+- Jeera rice: "Jeera rice — ghee mein jeera tadka karke chawal mein mix karo"
+- Pulao: "Vegetable pulao — pressure cooker mein sabji ke saath chawal"
 
 
 INGREDIENT-BASED SELECTION RULE — not rotation:
