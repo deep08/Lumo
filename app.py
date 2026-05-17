@@ -1315,15 +1315,11 @@ def send_whatsapp_long(to_number, message, delay=1):
     current = ""
     
     # Split by double newline first
-    sections = message.split("
-
-")
-    
+    sections = message.split("\n\n")
     for section in sections:
         if len(current) + len(section) + 2 <= 1500:
-            current += ("
+            current += ("\n\n" if current else "") + section
 
-" if current else "") + section
         else:
             if current:
                 parts.append(current)
