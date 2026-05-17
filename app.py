@@ -170,7 +170,7 @@ def extract_meal_name(ai_reply):
 def is_yes(message):
     msg = message.lower().strip()
     yes_words = ["yes", "haan", "theek hai", "okay", "ok",
-                 "bilkul", "perfect", "bana lo", "bana do", "haan ji",
+                 "bilkul", "perfect", "bana lijiye", "bana do", "haan ji",
                  "try karte hain", "chalega", "sahi hai"]
     return msg in yes_words
 
@@ -254,7 +254,7 @@ COOK MESSAGE FORMAT
 Short. Clear. Hinglish. No lecture.
 
 ONBOARDING — first time user
-Step 1: "Namaste! Main Lumo hoon — aapke ghar ki knowledgeable dost jo tumhare khane ko interesting aur energising banane mein help karegi 😊
+Step 1: "Namaste! Main Lumo hoon — aapki ghar ki knowledgeable dost jo aapke khane ko interesting aur energising banane mein help karegi 😊
 
 Ek tip — jitna detail mein apna routine batao, utna better aur personalized suggestions milenge!
 
@@ -318,7 +318,7 @@ INGREDIENT CONSUMPTION RULE:
 Ingredients get used up after cooking. Lumo tracks this.
 
 After user confirms a meal (says yes) — Lumo asks:
-"Perfect! 😊 Kya koi ingredient khatam ho gaya? Batao toh fridge update kar doon."
+"Perfect! 😊 Kya koi ingredient khatam ho gaya? Bataiye toh fridge update kar doon."
 
 If user says something finished ("tori khatam", "paneer nahi raha", "dal khatam ho gayi"):
 - Remove that ingredient from their fridge record
@@ -555,7 +555,7 @@ Only ask about fridge if:
 
 If user says "same fridge hai" or "kuch naya nahi aaya" — use previously mentioned ingredients.
 If conversation history has fridge contents — reference them naturally:
-"Tumne bataya tha ki palak, dal, paneer hai — ussi se suggest karti hoon 😊"
+"Aapne bataya tha ki palak, dal, paneer hai — ussi se suggest karti hoon 😊"
 
 
 STRICT INGREDIENT RULE — most important rule in the entire prompt
@@ -624,7 +624,7 @@ Format:
 SOAKING CONFIRMATION FLOW:
 After every dinner suggestion that includes the soaking reminder — immediately ask:
 
-"Kal kuch soak karna hai? Batao toh kal ka plan set kar deti hoon 😊"
+"Kal kuch soak karna hai? Bataiye toh kal ka plan set kar deti hoon 😊"
 
 When user confirms soaking:
 - "Haan chhole soak kar rahi hoon" → Save: chhole soaking confirmed for tomorrow
@@ -640,7 +640,7 @@ SOAKING MEMORY RULE:
 Once user confirms soaking — remember it for next day's lunch suggestion.
 Do not ask again in the morning — Lumo already knows.
 Just include it naturally:
-"Tumne kal chhole soak kiye the — aaj lunch mein chhole banate hain 😊"
+"Aapne kal chhole soak kiye the — aaj lunch mein chhole banate hain 😊"
 
 If user did NOT confirm soaking but asks for chhole next day:
 Ask first: "Kya chhole soak kiye the? Agar nahi toh masoor dal suggest karti hoon — woh bina soaking ke banta hai 😊"
@@ -653,12 +653,12 @@ SOAKING REMINDER — two times only, never more:
 After MORNING suggestion (breakfast + lunch combined):
 Add ONE line at the bottom:
 "💡 Agar aaj dinner ya kal ke liye chhole, rajma ya sabut dal banana hai toh abhi soak kar do! (6-8 ghante chahiye)"
-Then ask: "Kuch soak karna hai? Batao toh plan mein include kar leti hoon 😊"
+Then ask: "Kuch soak karna hai? Bataiye toh plan mein include kar leti hoon 😊"
 
 After EVENING suggestion (dinner only):
 Add ONE line at the bottom:
 "💡 Kal ke liye — agar chhole, rajma ya sabut dal banana hai toh aaj raat soak kar do! (8 ghante chahiye)"
-Then ask: "Kal kuch soak karna hai? Batao toh kal ka plan set kar deti hoon 😊"
+Then ask: "Kal kuch soak karna hai? Bataiye toh kal ka plan set kar deti hoon 😊"
 
 NEVER add soaking reminder separately for breakfast alone or lunch alone.
 Morning message covers both breakfast and lunch — one reminder at the bottom is enough.
@@ -722,7 +722,7 @@ Time based suggestions:
 🕒 30 minutes — Complete meal with multiple dishes
 
 Flow:
-Step 1: "Kitna time hai tumhare paas? ⚡5 min, 🕐15 min, ya 🕒30 min?"
+Step 1: "Kitna time hai aapke paas? ⚡5 min, 🕐15 min, ya 🕒30 min?"
 Step 2: Based on time — ask what ingredients are available
 Step 3: Suggest matching tested recipe with exact steps
 
@@ -763,7 +763,7 @@ Morning steps:
 3. Squeeze lemon, add salt and black pepper
 4. Optional: add sattu powder for extra protein
 5. Stir and drink
-Why it works: Everything prepped in advance. Morning mein sirf mix karo aur pi lo — 2 minutes. Chia gives omega-3, flax adds fibre, sattu gives protein. All in one glass.
+Why it works: Everything prepped in advance. Morning mein sirf mix karo aur pi lijiye — 2 minutes. Chia gives omega-3, flax adds fibre, sattu gives protein. All in one glass.
 Cook/user message: Chia flax drink — raat ko chia bhigo do, subah ground flax + lemon + salt + pepper mix karo. Sattu bhi daal sakte ho protein ke liye.
 
 RECIPE 3: Dry Fruit Energy Laddoos — makes 15 days supply
@@ -873,10 +873,10 @@ Step 2 — Match to naya avatar:
 If they say poha → suggest oregano black pepper version
 If they say dal → suggest coconut curry leaf version
 If they say oats → suggest savoury vegetable version
-If no match → say: "Interesting! Batao kya ingredients hain — main ek naya twist sochti hoon 😊"
+If no match → say: "Interesting! Bataiye kya ingredients hain — main ek naya twist sochti hoon 😊"
 
 Step 3 — Present the twist:
-"[Dish name] toh sab banate hain same way. Aaj ek twist try karo — [twist description]. [Time], same ingredients almost, but taste bilkul different. Try karein?"
+"[Dish name] toh sab banate hain same way. Aaj ek twist try karein — [twist description]. [Time], same ingredients almost, but taste bilkul different. Try karein?"
 
 Step 4 — If yes:
 Give exact recipe steps from tested recipes above.
@@ -967,7 +967,7 @@ When user asks for weekly plan — "weekly plan chahiye", "ek hafte ka plan bana
 Generate complete 7 day plan with all three meals. Send in multiple messages:
 
 Message 1 — Introduction:
-"📅 Tumhara weekly meal plan ready kar rahi hoon — balanced diet ke saath! Abhi bhejti hoon 😊"
+"📅 Aapka weekly meal plan ready kar rahi hoon — balanced diet ke saath! Abhi bhejti hoon 😊"
 
 Message 2 — Monday, Tuesday, Wednesday:
 "🗓 *Monday*
@@ -1079,7 +1079,7 @@ def process_and_reply(user_message, user_number):
             preferences_cache.pop(user_number, None)
             onboarding_state.pop(user_number, None)
             send_whatsapp(user_number,
-                "Fresh start! 🌟 Namaste! Main Lumo hoon. Batao — abhi fridge mein kya kya hai?")
+                "Fresh start! 🌟 Namaste! Main Lumo hoon. Bataiye — abhi fridge mein kya kya hai?")
             return
 
         if is_preference(user_message):
@@ -1145,7 +1145,7 @@ def process_and_reply(user_message, user_number):
 
     except Exception as e:
         print(f"Error: {e}")
-        send_whatsapp(user_number, "Ek second — kuch issue aa gaya. Dobara try karo! 😊")
+        send_whatsapp(user_number, "Ek second — kuch issue aa gaya. Dobara try karein! 😊")
 
 @app.route("/webhook", methods=["POST"])
 def webhook():
