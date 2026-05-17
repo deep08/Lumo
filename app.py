@@ -1205,55 +1205,50 @@ SALAD VARIATIONS (rotate always):
 - Chana salad (boiled)
 
 
-SEEDS AND NUTS — daily inclusion rule:
-Seeds and nuts are missing from most Indian household diets. Lumo includes them naturally every day — never as a separate dish, always embedded in existing meals.
+FRUITS, NUTS AND SEEDS — breakfast only rule:
+Fruits, nuts and seeds belong in breakfast. Not scattered across all meals.
 
-DAILY SEEDS AND NUTS INCLUSION:
-At least one meal per day should include seeds or nuts naturally.
+EVERY BREAKFAST MUST INCLUDE:
 
-HOW TO INCLUDE — natural ways only:
+Fruits (rotate daily — never same fruit two days in a row):
+- Fresh seasonal fruit alongside or in breakfast
+- Options: banana, apple, papaya, grapes, pomegranate, mango (seasonal), strawberries
+- Just one fruit per day — not a fruit salad
 
-In BREAKFAST:
-- Overnight oats → always add pumpkin seeds or sunflower seeds or both
-- Oats with milk → add almonds, walnuts, or cashews after cooling
-- Poha → add peanuts (already Indian, cook knows this)
-- Any breakfast → soaked almonds (4-5) and walnuts (2) as side
+Nuts (small handful alongside breakfast):
+- Soaked almonds (4-5) — soak overnight, eat in morning
+- Walnuts (2) — eat as is
+- Cashews (4-5) — occasional
+- Rotate — not same nut every day
 
-In SALAD:
-- Sprinkle roasted pumpkin seeds or sunflower seeds on any salad
-- Add roasted sesame seeds to gajar kheera salad
-- Costs nothing extra — cook just needs to roast and sprinkle
+Seeds (add to breakfast dish):
+- Pumpkin seeds — add to oats or eat alongside
+- Sunflower seeds — sprinkle on breakfast
+- Chia seeds — already in morning drink recipe
+- Flax seeds (ground) — already in morning drink recipe
+- Rotate seeds daily
 
-In DAL TADKA:
-- Add sesame seeds (til) to the tadka — very common in Indian cooking
-- Adds nutrition invisibly — user doesn't even notice
+BREAKFAST FORMAT WITH FRUITS NUTS SEEDS:
+"🌅 Breakfast:
+- [Main breakfast dish — poha/upma/paratha]
+- [Fruit] — [which one today]
+- Soaked almonds (4-5) + walnuts (2)
+- [Seeds] — sprinkled or alongside"
 
-In RAITA:
-- Add roasted jeera and a pinch of pumpkin seeds to raita
+COOK MESSAGE for breakfast:
+Keep simple — cook just needs to know:
+"Breakfast ke saath:
+- [Fruit] rakh dena
+- Soaked almonds aur walnuts rakh dena (pehle se bheego ke rakho raat ko)"
 
-As SNACK (suggest once a week):
-- Dry fruit laddoos (Deepanjali's tested recipe) — make once, lasts 15 days
-- Handful of mixed nuts as evening snack
+SOAKING REMINDER FOR ALMONDS:
+When suggesting breakfast — always add:
+"Almonds raat ko bhigo ke rakh dena 😊"
 
-SEEDS ROTATION — vary across the week:
-- Monday: Pumpkin seeds in breakfast + sesame in dal tadka
-- Tuesday: Sunflower seeds in salad + peanuts in breakfast
-- Wednesday: Almonds and walnuts with breakfast + til in sabji
-- Thursday: Chia seeds in morning drink + pumpkin in salad
-- Friday: Flax seeds (ground) in drink + walnuts with breakfast
-- Saturday: Mixed seeds in salad + cashews in breakfast
-- Sunday: Dry fruit laddoos as snack
-
-IMPORTANT — never suggest seeds as a main item:
-Seeds and nuts are always additions to existing meals — never the star.
-"Salad ke upar thode roasted pumpkin seeds daalo" — correct
-"Aaj sirf seeds khaiye" — never
-
-COOK MESSAGE for seeds:
-Keep it simple — cook already knows peanuts in poha.
-For new additions just say:
-"Salad ke upar thode roasted pumpkin seeds ya sunflower seeds chhido 😊"
-"Dal tadka mein ek pinch til bhi daalo"
+LUNCH AND DINNER:
+No fruits, no nuts, no seeds in lunch or dinner suggestions.
+These belong only in breakfast.
+Exception — peanuts in poha is fine as peanuts are standard poha ingredient.
 
 
 INGREDIENT-BASED SELECTION RULE — not rotation:
