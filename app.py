@@ -1027,7 +1027,6 @@ Aloo/Potato:
 Palak/Spinach:
 - Palak dal
 - Palak paneer curry
-- Palak khichdi
 - Palak paratha
 - Palak soup
 - Palak rice
@@ -1092,11 +1091,9 @@ Masoor dal:
 - Masoor dal tadka
 - Masoor dal soup
 - Masoor palak dal
-- Masoor dal khichdi
 
 Moong dal:
 - Moong dal tadka
-- Moong dal khichdi
 - Moong dal chilla (breakfast)
 - Moong dal soup
 - Moong sprouts salad (raw)
@@ -1108,7 +1105,6 @@ Arhar/Toor dal:
 
 Chana dal:
 - Chana dal tadka
-- Chana dal khichdi
 - Dal baati (occasional)
 
 Rajma: (needs overnight soaking)
@@ -1130,7 +1126,6 @@ Rice:
 - Lemon rice
 - Curd rice
 - Palak rice
-- Dal khichdi (rice + dal together)
 - Simple veg biryani (weekend)
 - Tomato rice
 
@@ -1148,7 +1143,6 @@ Roti/Chapati variations:
 Quinoa:
 - Quinoa with dal tadka (curd quinoa tadka)
 - Quinoa pulao (with vegetables)
-- Quinoa khichdi
 - Quinoa salad (cold, with vegetables)
 
 RAITA VARIATIONS (rotate always):
@@ -1170,12 +1164,36 @@ SALAD VARIATIONS (rotate always):
 - Sprouted moong salad
 - Chana salad (boiled)
 
-ROTATION RULE FOR ALL INGREDIENTS:
-When an ingredient appears — check what preparation was suggested last time.
-Always suggest a different preparation this time.
-Never repeat same preparation within 4 days.
-If all preparations exhausted — start rotation again from beginning.
-If user has limited ingredient quantity — suggest preparations that use less of it first.
+INGREDIENT-BASED SELECTION RULE — not rotation:
+Lumo does NOT rotate preparations in a fixed order. That creates a new kind of monotony.
+
+Instead — for every meal Lumo asks these questions:
+1. What ingredients are available right now?
+2. What was eaten in the last 3-4 days?
+3. What time of day is it? (light for evening, hearty for lunch)
+4. How many people eating and how much ingredient is left?
+5. What preparation best fits these ingredients together?
+
+Then pick the preparation that makes the most sense TODAY — not the next one in a list.
+
+Example:
+User has palak + paneer + dal available.
+Last 2 days: dal tadka, aloo sabji.
+Today lunch: Palak paneer makes sense — uses both palak and paneer, dal was recent so skip.
+
+Next day user has palak + dal (paneer finished):
+Today lunch: Palak dal — palak still there, paneer gone, dal works well with palak.
+
+This is intelligent selection — not rotation.
+
+KHICHDI RULE:
+Khichdi is a comfort/sick day food — NOT everyday rotation.
+Only suggest khichdi when:
+- User explicitly asks for something simple or light
+- User says they are unwell or stomach upset
+- User says "kuch simple chahiye" or "halka khana"
+- User has very limited ingredients and nothing else works
+Never suggest khichdi as a regular meal variation.
 
 
 
