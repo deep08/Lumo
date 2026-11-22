@@ -6,8 +6,25 @@
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
+    "splash": {
+      "backgroundColor": "#FAF8F8"
+    },
+    "plugins": [
+      [
+        "expo-image-picker",
+        {
+          "cameraPermission": "Allow Lumo to take photos of your meals.",
+          "photosPermission": "Allow Lumo to choose meal photos from your library."
+        }
+      ],
+      "expo-font"
+    ],
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "infoPlist": {
+        "NSCameraUsageDescription": "Allow Lumo to take photos of your meals.",
+        "NSPhotoLibraryUsageDescription": "Allow Lumo to choose meal photos from your library."
+      }
     },
     "android": {
       "adaptiveIcon": {

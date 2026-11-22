@@ -25,7 +25,7 @@ const entries = [
 type WelcomeScreenProps = {
   draft: string;
   onDraftChange: (value: string) => void;
-  onSend: (value: string) => void;
+  onSend: (value: string, imageUri?: string | null) => void;
   onChoose: (title: JourneyTitle) => void;
 };
 

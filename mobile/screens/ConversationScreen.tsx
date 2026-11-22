@@ -1,8 +1,9 @@
-import { useEffect, useRef, type ElementRef } from "react";
-import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { useEffect, useRef, useState, type ElementRef } from "react";
+import { Image, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import Composer from "../components/Composer";
 import { BackIcon, MoreIcon } from "../components/Icons";
+import ImageViewer from "../components/ImageViewer";
 import Loader from "../components/Loader";
 import RecommendationCard from "../components/RecommendationCard";
 import { colors, radius, space } from "../theme";
@@ -28,10 +29,9 @@ type ConversationScreenProps = {
   phase: ConversationPhase;
   draft: string;
   onDraftChange: (value: string) => void;
-  onSend: (value: string) => void;
+  onSend: (value: string, imageUri?: string | null) => void;
   onChip: (label: string) => void;
   onChangeMeal: () => void;
-  onAccept: () => void;
   onToggleRecipe: (messageId: string) => void;
   onBack: () => void;
 };
@@ -44,11 +44,11 @@ export default function ConversationScreen({
   onSend,
   onChip,
   onChangeMeal,
-  onAccept,
   onToggleRecipe,
   onBack,
 }: ConversationScreenProps) {
   const threadRef = useRef<ElementRef<typeof ScrollView>>(null);
+  const [viewerUri, setViewerUri] = useState<string | null>(null);
   const latestChipId = [...messages].reverse().find((message) => message.chips)?.id;
 
   useEffect(() => {
@@ -84,7 +84,25 @@ export default function ConversationScreen({
           if (message.role === "user") {
             return (
               <View key={message.id} style={styles.turnUser}>
-                <Text style={styles.userBubble}>{message.text}</Text>
+                {message.image ? (
+                  <Pressable
+                    accessibilityLabel="View photo"
+                    onPress={() => setViewerUri(message.image ?? null)}
+                    style={styles.userImageHit}
+                  >
+                    <Image
+                      source={{ uri: message.image }}
+                      style={styles.userImage}
+                      resizeMode="cover"
+                      accessibilityIgnoresInvertColors
+                    />
+                  </Pressable>
+                ) : null}
+                {message.text ? (
+                  <View style={styles.userBubble}>
+                    <Text style={styles.userBubbleText}>{message.text}</Text>
+                  </View>
+                ) : null}
               </View>
             );
           }
@@ -124,8 +142,6 @@ export default function ConversationScreen({
                   recipeOpen={Boolean(message.recipeOpen)}
                   onToggleRecipe={() => onToggleRecipe(message.id)}
                   onChangeMeal={onChangeMeal}
-                  onAccept={onAccept}
-                  acceptDisabled={phase === "confirmed"}
                 />
               ) : null}
             </View>
@@ -133,6 +149,7 @@ export default function ConversationScreen({
         })}
       </ScrollView>
       <Composer tray value={draft} onChange={onDraftChange} onSubmit={onSend} />
+      <ImageViewer uri={viewerUri} onClose={() => setViewerUri(null)} />
     </View>
   );
 }
@@ -182,10 +199,22 @@ const styles = StyleSheet.create({
     paddingVertical: space[12],
   },
   turnUser: {
+    width: "100%",
     alignItems: "flex-end",
+    gap: space[8],
+  },
+  userImageHit: {
+    width: 64,
+    height: 64,
+  },
+  userImage: {
+    width: 64,
+    height: 64,
+    borderRadius: radius.xs,
+    overflow: "hidden",
   },
   userBubble: {
-    maxWidth: "100%",
+    maxWidth: "80%",
     paddingVertical: space[8],
     paddingHorizontal: space[12],
     borderTopLeftRadius: radius.md,
@@ -193,6 +222,8 @@ const styles = StyleSheet.create({
     borderBottomLeftRadius: radius.md,
     borderBottomRightRadius: radius.tail,
     backgroundColor: colors.userBubble,
+  },
+  userBubbleText: {
     color: colors.contentPrimary,
     fontSize: 16,
     lineHeight: 24,

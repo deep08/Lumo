@@ -1,5 +1,8 @@
-import { StyleSheet, Text, View } from "react-native";
+import { Image, StyleSheet, Text, View } from "react-native";
 import { colors } from "../theme";
+
+const cameraSrc = require("../assets/icon-camera.png");
+const gallerySrc = require("../assets/icon-gallery.png");
 
 export function BackIcon() {
   return <Text style={styles.back}>‹</Text>;
@@ -20,6 +23,22 @@ export function AddIcon() {
     <View style={styles.add}>
       <View style={styles.addH} />
       <View style={styles.addV} />
+    </View>
+  );
+}
+
+export function CameraIcon() {
+  return (
+    <View style={styles.icon}>
+      <Image source={cameraSrc} style={styles.camera} accessibilityIgnoresInvertColors />
+    </View>
+  );
+}
+
+export function GalleryIcon() {
+  return (
+    <View style={styles.icon}>
+      <Image source={gallerySrc} style={styles.gallery} accessibilityIgnoresInvertColors />
     </View>
   );
 }
@@ -78,5 +97,19 @@ const styles = StyleSheet.create({
     fontSize: 18,
     lineHeight: 22,
     fontWeight: "600",
+  },
+  icon: {
+    width: 24,
+    height: 24,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  camera: {
+    width: 24,
+    height: 24,
+  },
+  gallery: {
+    width: 24,
+    height: 22,
   },
 });

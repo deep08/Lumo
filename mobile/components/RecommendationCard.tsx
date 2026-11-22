@@ -1,4 +1,4 @@
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import { Pressable, Share, StyleSheet, Text, View } from "react-native";
 import { colors, fonts, radius, space } from "../theme";
 import { MealCard } from "../types";
 
@@ -12,9 +12,20 @@ type RecommendationCardProps = {
   recipeOpen: boolean;
   onToggleRecipe: () => void;
   onChangeMeal: () => void;
-  onAccept: () => void;
-  acceptDisabled: boolean;
 };
+
+function shareMessageFor(meal: MealCard) {
+  const name = meal.title.trim().replace(/\.+$/, "");
+  return `Please make ${name || "this meal"}.`;
+}
+
+async function shareMeal(meal: MealCard) {
+  try {
+    await Share.share({ message: shareMessageFor(meal) });
+  } catch {
+    return;
+  }
+}
 
 function EyebrowDot() {
   return (
@@ -48,8 +59,6 @@ export default function RecommendationCard({
   recipeOpen,
   onToggleRecipe,
   onChangeMeal,
-  onAccept,
-  acceptDisabled,
 }: RecommendationCardProps) {
   const recipe = meal.recipe;
   const hasRecipe = Boolean(recipe?.ingredients.length && recipe?.steps.length);
@@ -125,16 +134,13 @@ export default function RecommendationCard({
         </Pressable>
         <Pressable
           accessibilityRole="button"
-          accessibilityLabel="Send to cook"
-          disabled={acceptDisabled}
-          onPress={onAccept}
-          style={({ pressed }) => [
-            styles.button,
-            styles.buttonPrimary,
-            pressed && !acceptDisabled && styles.buttonPrimaryPressed,
-          ]}
+          accessibilityLabel="Share"
+          onPress={() => {
+            void shareMeal(meal);
+          }}
+          style={({ pressed }) => [styles.button, styles.buttonPrimary, pressed && styles.buttonPrimaryPressed]}
         >
-          <Text style={styles.buttonPrimaryLabel}>Send to cook</Text>
+          <Text style={styles.buttonPrimaryLabel}>Share</Text>
         </Pressable>
       </View>
     </View>

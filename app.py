@@ -1,7 +1,10 @@
 from flask import Flask, jsonify, request
 from twilio.twiml.messaging_response import MessagingResponse
 from twilio.rest import Client as TwilioClient
+from io import BytesIO
+from PIL import Image
 import anthropic
+import base64
 import json
 import os
 import re
@@ -1701,6 +1704,78 @@ ENTRY_MODES = {
 }
 MAX_MODEL_TURNS = 12
 MAX_CONTEXT_TURNS = 40
+VISION_MEDIA_TYPES = {"image/jpeg", "image/png", "image/gif", "image/webp"}
+MAX_IMAGE_EDGE = 1568
+MAX_IMAGE_BYTES = 4_500_000
+
+
+class ChatImageError(ValueError):
+    pass
+
+
+def content_plain(message):
+    content = message.get("content")
+    if isinstance(content, str):
+        return content
+    if isinstance(content, list):
+        return " ".join(
+            block.get("text", "")
+            for block in content
+            if isinstance(block, dict) and block.get("type") == "text"
+        ).strip()
+    return ""
+
+
+def claude_image_block(raw_image):
+    if not isinstance(raw_image, dict):
+        raise ChatImageError("image must be an object")
+    media_type = raw_image.get("media_type")
+    data = raw_image.get("data")
+    if media_type not in VISION_MEDIA_TYPES or not isinstance(data, str) or not data.strip():
+        print("Chat image received: yes, media_type=unsupported")
+        raise ChatImageError("unsupported image")
+    try:
+        binary = base64.b64decode(data, validate=False)
+    except Exception as error:
+        print(f"Chat image received: yes, media_type={media_type}")
+        raise ChatImageError("image data is invalid") from error
+    if not binary:
+        print(f"Chat image received: yes, media_type={media_type}")
+        raise ChatImageError("image data is empty")
+    try:
+        image = Image.open(BytesIO(binary))
+        image.load()
+    except Exception as error:
+        print(f"Chat image received: yes, media_type={media_type}")
+        raise ChatImageError("image could not be read") from error
+    print(f"Chat image received: yes, media_type={media_type}")
+    if image.mode != "RGB":
+        image = image.convert("RGB")
+    width, height = image.size
+    longest = max(width, height)
+    if longest > MAX_IMAGE_EDGE:
+        scale = MAX_IMAGE_EDGE / float(longest)
+        image = image.resize(
+            (max(1, int(width * scale)), max(1, int(height * scale))),
+            Image.Resampling.LANCZOS,
+        )
+    encoded = b""
+    for quality in (85, 70, 55):
+        buffer = BytesIO()
+        image.save(buffer, format="JPEG", quality=quality, optimize=True)
+        encoded = buffer.getvalue()
+        if len(encoded) <= MAX_IMAGE_BYTES:
+            break
+    if len(encoded) > MAX_IMAGE_BYTES:
+        raise ChatImageError("image is too large")
+    return {
+        "type": "image",
+        "source": {
+            "type": "base64",
+            "media_type": "image/jpeg",
+            "data": base64.b64encode(encoded).decode("ascii"),
+        },
+    }
 
 
 def web_behavior_text():
@@ -1718,14 +1793,35 @@ def normalize_chat_messages(raw_messages):
             continue
         role = item.get("role")
         content = item.get("content")
-        if role not in ("user", "assistant") or not isinstance(content, str):
+        if role not in ("user", "assistant"):
             continue
-        text = content.strip()
-        if not text:
-            continue
-        message = {"role": role, "content": text[:2000]}
-        if cleaned and cleaned[-1]["role"] == role:
-            cleaned[-1]["content"] = f"{cleaned[-1]['content']}\n{message['content']}"[:2000]
+        text = content.strip()[:2000] if isinstance(content, str) else ""
+        image_block = None
+        if role == "user" and item.get("image") is not None:
+            image_block = claude_image_block(item.get("image"))
+        if role == "assistant":
+            if not text:
+                continue
+            message = {"role": "assistant", "content": text}
+        elif image_block:
+            blocks = [image_block]
+            blocks.append({
+                "type": "text",
+                "text": text or "The user sent this photo.",
+            })
+            message = {"role": "user", "content": blocks}
+        else:
+            if not text:
+                continue
+            message = {"role": "user", "content": text}
+        previous = cleaned[-1] if cleaned else None
+        if (
+            previous
+            and previous["role"] == role
+            and isinstance(previous["content"], str)
+            and isinstance(message["content"], str)
+        ):
+            previous["content"] = f"{previous['content']}\n{message['content']}"[:2000]
         else:
             cleaned.append(message)
     while cleaned and cleaned[0]["role"] != "user":
@@ -1733,15 +1829,81 @@ def normalize_chat_messages(raw_messages):
     return cleaned
 
 
+def latest_user_has_image(messages):
+    for message in reversed(messages):
+        if message.get("role") != "user":
+            continue
+        content = message.get("content")
+        if isinstance(content, list):
+            return any(
+                isinstance(block, dict) and block.get("type") == "image"
+                for block in content
+            )
+        return False
+    return False
+
+
+def assistant_text(response):
+    parts = []
+    for block in getattr(response, "content", None) or []:
+        text = getattr(block, "text", None)
+        if isinstance(text, str) and text.strip():
+            parts.append(text)
+    return "\n".join(parts).strip()
+
+
+PHOTO_IDENTIFY_RE = re.compile(
+    r"(what (?:are|is) (?:the )?(?:ingredients|foods|vegetables|items|this)|"
+    r"what(?:'s| is) in (?:the |this )?(?:photo|picture|image)|"
+    r"ingredients in (?:the |this )?(?:photo|picture|image)|"
+    r"what do you see|"
+    r"\bidentify\b)",
+    re.I,
+)
+PHOTO_COOK_RE = re.compile(
+    r"(\bcook\b|\brecipe\b|\bdish\b|\bsabzi\b|\bkhana\b|\bbana[oae]\b|"
+    r"\bdinner\b|\blunch\b|\bbreakfast\b|"
+    r"what (?:can|should|do) i (?:make|cook|eat)|"
+    r"make (?:me |a |this |with )|"
+    r"\bsuggest\b|change meal|complete meal)",
+    re.I,
+)
+
+
+def latest_user_text(messages):
+    for message in reversed(messages):
+        if message.get("role") == "user":
+            return content_plain(message)
+    return ""
+
+
+def omit_meal_card_for_photo(history, entry):
+    if not latest_user_has_image(history):
+        return False
+    text = latest_user_text(history).strip()
+    placeholder = text.lower() in ("", "the user sent this photo.")
+    identify = bool(PHOTO_IDENTIFY_RE.search(text)) or placeholder
+    cook = bool(PHOTO_COOK_RE.search(text))
+    if cook:
+        return False
+    if identify and not placeholder:
+        return True
+    if placeholder and entry in ENTRY_MODES:
+        return False
+    if placeholder:
+        return True
+    return entry not in ENTRY_MODES
+
+
 def meal_context(entry, messages):
     included = {id(message) for message in recent_model_turns(messages)}
-    facts = [
-        message["content"]
-        for message in messages
-        if message["role"] == "user"
-        and id(message) not in included
-        and message["content"] != entry
-    ]
+    facts = []
+    for message in messages:
+        if message["role"] != "user" or id(message) in included:
+            continue
+        text = content_plain(message)
+        if text and text != entry:
+            facts.append(text)
     if not facts:
         return "None yet."
     return " | ".join(facts[-4:])
@@ -1754,10 +1916,10 @@ def recent_model_turns(messages):
     return history
 
 
-def web_chat_system(entry, context):
+def web_chat_system(entry, context, has_photo=False):
     label = entry if entry in ENTRY_MODES else "Not selected"
     mode = ENTRY_MODES.get(label, "General meal help.")
-    return (
+    prompt = (
         web_behavior_text()
         + "\n\nThis conversation:\n"
         + f"Entry mode: {label}\n"
@@ -1780,7 +1942,28 @@ def web_chat_system(entry, context):
         + "A meal_card must include recipe. ingredients is an array of short strings, with quantities where useful. steps is an array of 3 to 5 short English instructions. Never omit recipe, and never send ingredients or steps as one string.\n"
         + "Use confirmed ingredients. Do not treat an unconfirmed ingredient as already available.\n"
         + "Put chips only when the behavior allows them.\n"
+        + "If the latest user message includes a photo, look at the actual image.\n"
+        + "Name an ingredient only when it is confidently visible. Uncertain items are not confirmed.\n"
+        + "Do not invent food, and do not treat oil, salt, spices, onion, tomato, ginger, garlic, or chilli as visible unless the photo clearly shows them.\n"
+        + "A photo is not a request to recommend a meal. Omit meal_card unless they asked what to cook.\n"
+        + "If they only asked what is in the photo, list only confident ingredients, omit meal_card, and do not suggest a dish.\n"
+        + "If an ingredient is uncertain, ask one focused clarification instead of guessing.\n"
+        + "If the photo is not food, say so briefly and do not invent ingredients or a meal_card.\n"
     )
+    if has_photo:
+        prompt += (
+            "The latest user message includes a photo. These photo rules override Entry mode, Cook with my ingredients auto-recommend, and the food-advice instruction above.\n"
+            "Look at the actual image first. Decide each item as confidently visible or uncertain.\n"
+            "Claim an ingredient only when there is reasonable visual evidence for that specific food. If it could be something else, it is uncertain. Do not guess from a typical Indian kitchen.\n"
+            "In text, list only confident ingredients. Do not name an uncertain item as present.\n"
+            "Oil, salt, and basic spices are recipe staples only. Never list them as ingredients in the photo unless they are actually visible.\n"
+            "If the photo is not food, say what it is in one short line, omit meal_card, and do not give food advice about it.\n"
+            "If they only asked what is in the photo, or only sent a photo, answer that question and omit meal_card. Do not recommend a dish.\n"
+            "If they asked what to cook, use only confident ingredients. If a key ingredient is uncertain, ask one short clarification, omit meal_card, and wait. Recommend one familiar dish with a meal_card only when they asked to cook and the confident ingredients are enough.\n"
+            "If they asked about a meal they already eat in the photo, follow Make my meals healthier for that meal.\n"
+            "Still reply with one JSON object and nothing else.\n"
+        )
+    return prompt
 
 
 def coerce_text_list(raw, limit, item_max):
@@ -1834,11 +2017,16 @@ def parse_meal_card(raw):
     return meal
 
 
-def parse_chat_response(raw):
-    text = raw.strip()
+def parse_chat_response(raw, allow_meal_card=True):
+    text = (raw or "").strip()
     fenced = re.fullmatch(r"```(?:json)?\s*(.*?)\s*```", text, flags=re.DOTALL)
     if fenced:
         text = fenced.group(1).strip()
+    else:
+        start = text.find("{")
+        end = text.rfind("}")
+        if start != -1 and end > start:
+            text = text[start : end + 1]
     data = json.loads(text)
     if not isinstance(data, dict):
         raise ValueError("response must be an object")
@@ -1848,10 +2036,10 @@ def parse_chat_response(raw):
     chips = data.get("chips", [])
     if chips is None:
         chips = []
-    if not isinstance(chips, list) or len(chips) > 4:
+    if not isinstance(chips, list):
         raise ValueError("chips must be a short list")
     cleaned_chips = []
-    for chip in chips:
+    for chip in chips[:4]:
         if not isinstance(chip, str):
             raise ValueError("chip must be text")
         label = chip.strip()
@@ -1859,15 +2047,16 @@ def parse_chat_response(raw):
             raise ValueError("chip must be short")
         cleaned_chips.append(label)
     reply = {"text": message.strip()[:1200], "chips": cleaned_chips}
-    meal_card = parse_meal_card(data.get("meal_card"))
+    meal_card = parse_meal_card(data.get("meal_card")) if allow_meal_card else None
     if meal_card:
         reply["meal_card"] = meal_card
     return reply
 
 
-def request_claude_reply(system, history):
+def request_claude_reply(system, history, has_photo=False, allow_meal_card=True):
     client = anthropic.Anthropic(api_key=os.environ.get("ANTHROPIC_API_KEY"))
     reminder = ""
+    raw = ""
     for _ in range(2):
         response = client.messages.create(
             model="claude-sonnet-4-5",
@@ -1875,10 +2064,26 @@ def request_claude_reply(system, history):
             system=system + reminder,
             messages=history,
         )
+        raw = assistant_text(response)
+        stop_reason = getattr(response, "stop_reason", None)
+        print(
+            "Chat claude response: "
+            f"returned={'yes' if raw else 'no'}, stop_reason={stop_reason}"
+        )
         try:
-            return parse_chat_response(response.content[0].text)
-        except (ValueError, json.JSONDecodeError, IndexError, AttributeError):
+            reply = parse_chat_response(raw, allow_meal_card)
+            print("Chat claude parse: ok")
+            return reply
+        except (ValueError, json.JSONDecodeError, IndexError, AttributeError) as error:
+            print(f"Chat claude parse: failed {type(error).__name__}")
             reminder = "\nYour previous reply was not valid JSON. Return only the JSON object."
+    if has_photo and raw and not raw.lstrip().startswith("{"):
+        return {"text": raw[:1200], "chips": []}
+    if has_photo:
+        return {
+            "text": "I couldn’t read that photo clearly. Send it again, or tell me what you see.",
+            "chips": [],
+        }
     return {
         "text": "Tell me a little more about this meal and I’ll suggest one.",
         "chips": [],
@@ -1891,12 +2096,24 @@ def api_chat():
     entry = payload.get("entry")
     if entry not in ENTRY_MODES:
         entry = None
-    messages = normalize_chat_messages(payload.get("messages"))
+    try:
+        messages = normalize_chat_messages(payload.get("messages"))
+    except ChatImageError:
+        return jsonify({"error": "That photo could not be used."}), 400
     history = recent_model_turns(messages)
     if not history:
         return jsonify({"error": "A user message is required."}), 400
+    has_photo = latest_user_has_image(history)
+    allow_meal_card = not omit_meal_card_for_photo(history, entry)
+    if not has_photo:
+        print("Chat image received: no")
     try:
-        reply = request_claude_reply(web_chat_system(entry, meal_context(entry, messages)), history)
+        reply = request_claude_reply(
+            web_chat_system(entry, meal_context(entry, messages), has_photo),
+            history,
+            has_photo,
+            allow_meal_card,
+        )
     except Exception as error:
         secret = os.environ.get("ANTHROPIC_API_KEY") or ""
         detail = str(error).replace(secret, "[redacted]") if secret else str(error)

@@ -24,6 +24,7 @@ export type ChatMessage = {
   id: string;
   role: "user" | "assistant" | "status";
   text: string;
+  image?: string;
   chips?: string[];
   chipSelected?: string;
   meal?: MealCard;

@@ -4,6 +4,8 @@
   "main": "index.ts",
   "dependencies": {
     "expo": "~58.0.26",
+    "expo-font": "~58.0.12",
+    "expo-image-picker": "~58.0.10",
     "expo-status-bar": "~58.0.5",
     "react": "19.3.0",
     "react-native": "0.88.1",

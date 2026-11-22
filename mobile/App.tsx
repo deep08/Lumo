@@ -1,14 +1,16 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { KeyboardAvoidingView, Platform, StyleSheet, View } from "react-native";
+import { useFonts } from "expo-font";
 import { StatusBar } from "expo-status-bar";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { ERROR_TEXT, requestReply } from "./conversation/api";
 import ConversationScreen from "./screens/ConversationScreen";
+import SplashScreen from "./screens/SplashScreen";
 import WelcomeScreen from "./screens/WelcomeScreen";
-import { colors } from "./theme";
+import { colors, fonts } from "./theme";
 import { ChatMessage, ConversationState, EntryMode, JourneyTitle } from "./types";
 
-const CONFIRMATION = "Sounds good. This meal is set.";
+const SPLASH_MS = 1600;
 
 let sequence = 0;
 
@@ -17,8 +19,10 @@ function nextId() {
   return `m${sequence}`;
 }
 
-function userMessage(text: string): ChatMessage {
-  return { id: nextId(), role: "user", text };
+function userMessage(text: string, image?: string | null): ChatMessage {
+  const message: ChatMessage = { id: nextId(), role: "user", text };
+  if (image) message.image = image;
+  return message;
 }
 
 function assistantMessage(text: string, chips: string[] = [], meal?: ChatMessage["meal"]): ChatMessage {
@@ -45,16 +49,6 @@ function toggleRecipe(state: ConversationState, messageId: string): Conversation
   };
 }
 
-function confirmMeal(state: ConversationState): ConversationState {
-  if (state.phase === "loading" || state.phase === "confirmed") return state;
-  if (!state.messages.some((message) => message.meal)) return state;
-  return {
-    ...state,
-    phase: "confirmed",
-    messages: [...state.messages, assistantMessage(CONFIRMATION)],
-  };
-}
-
 function withChipSelected(messages: ChatMessage[], label: string) {
   let marked = false;
   return [...messages]
@@ -70,7 +64,10 @@ function withChipSelected(messages: ChatMessage[], label: string) {
 }
 
 export default function App() {
-  const [view, setView] = useState<"welcome" | "conversation">("welcome");
+  const [fontsLoaded, fontError] = useFonts({
+    [fonts.wordmark]: require("./assets/fonts/Lora-Bold.ttf"),
+  });
+  const [view, setView] = useState<"splash" | "welcome" | "conversation">("splash");
   const [conversation, setConversation] = useState<ConversationState>({
     phase: "ready",
     entry: null,
@@ -80,6 +77,21 @@ export default function App() {
   const conversationRef = useRef(conversation);
   const requestRef = useRef(0);
   conversationRef.current = conversation;
+
+  useEffect(() => {
+    const fallback = setTimeout(() => {
+      setView((current) => (current === "splash" ? "welcome" : current));
+    }, 4000);
+    return () => clearTimeout(fallback);
+  }, []);
+
+  useEffect(() => {
+    if (!fontsLoaded && !fontError) return;
+    const timer = setTimeout(() => {
+      setView((current) => (current === "splash" ? "welcome" : current));
+    }, SPLASH_MS);
+    return () => clearTimeout(timer);
+  }, [fontsLoaded, fontError]);
 
   function ask(entry: EntryMode, messages: ChatMessage[]) {
     const requestId = requestRef.current + 1;
@@ -121,17 +133,17 @@ export default function App() {
     ask(title, [userMessage(title)]);
   }
 
-  function sendMessage(text: string) {
+  function sendMessage(text: string, imageUri?: string | null) {
     const trimmed = text.trim();
+    const image = imageUri || null;
     const current = conversationRef.current;
-    if (!trimmed || current.phase === "loading") return;
+    if ((!trimmed && !image) || current.phase === "loading") return;
     setDraft("");
     setView("conversation");
-    if (view === "welcome") {
-      ask(null, [userMessage(trimmed)]);
-      return;
-    }
-    ask(current.entry, [...spokenMessages(current.messages), userMessage(trimmed)]);
+    const nextUser = userMessage(trimmed, image);
+    const history =
+      view === "welcome" ? [nextUser] : [...spokenMessages(current.messages), nextUser];
+    ask(view === "welcome" ? null : current.entry, history);
   }
 
   function chooseChip(label: string) {
@@ -149,13 +161,6 @@ export default function App() {
     ask(current.entry, [...messages, userMessage("Change meal")]);
   }
 
-  function acceptMeal() {
-    const current = conversationRef.current;
-    const next = confirmMeal(current);
-    conversationRef.current = next;
-    setConversation(next);
-  }
-
   function toggleMessageRecipe(messageId: string) {
     const next = toggleRecipe(conversationRef.current, messageId);
     conversationRef.current = next;
@@ -170,7 +175,9 @@ export default function App() {
           style={styles.screen}
           behavior={Platform.OS === "ios" ? "padding" : undefined}
         >
-          {view === "welcome" ? (
+          {view === "splash" ? (
+            fontsLoaded || fontError ? <SplashScreen /> : <View style={styles.screen} />
+          ) : view === "welcome" ? (
             <WelcomeScreen
               draft={draft}
               onDraftChange={setDraft}
@@ -186,7 +193,6 @@ export default function App() {
               onSend={sendMessage}
               onChip={chooseChip}
               onChangeMeal={changeMeal}
-              onAccept={acceptMeal}
               onToggleRecipe={toggleMessageRecipe}
               onBack={() => setView("welcome")}
             />

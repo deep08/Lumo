@@ -40,6 +40,61 @@ export function apiBaseUrl(): string {
 
 export { ERROR_TEXT };
 
+const VISION_MEDIA_TYPES = new Set(["image/jpeg", "image/png", "image/gif", "image/webp"]);
+const MAX_LOCAL_IMAGE_BYTES = 8 * 1024 * 1024;
+
+type PayloadImage = {
+  media_type: string;
+  data: string;
+};
+
+function bytesToBase64(bytes: Uint8Array) {
+  let binary = "";
+  const chunk = 0x2000;
+  for (let index = 0; index < bytes.length; index += chunk) {
+    binary += String.fromCharCode(...bytes.subarray(index, index + chunk));
+  }
+  return btoa(binary);
+}
+
+function mediaTypeFromBytes(bytes: Uint8Array, headerType: string | null) {
+  if (bytes.length >= 3 && bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff) {
+    return "image/jpeg";
+  }
+  if (bytes.length >= 8 && bytes[0] === 0x89 && bytes[1] === 0x50 && bytes[2] === 0x4e && bytes[3] === 0x47) {
+    return "image/png";
+  }
+  if (bytes.length >= 6 && bytes[0] === 0x47 && bytes[1] === 0x49 && bytes[2] === 0x46) {
+    return "image/gif";
+  }
+  if (
+    bytes.length >= 12 &&
+    bytes[0] === 0x52 &&
+    bytes[1] === 0x49 &&
+    bytes[2] === 0x46 &&
+    bytes[3] === 0x46 &&
+    bytes[8] === 0x57 &&
+    bytes[9] === 0x45 &&
+    bytes[10] === 0x42 &&
+    bytes[11] === 0x50
+  ) {
+    return "image/webp";
+  }
+  const fallback = (headerType ?? "").split(";")[0].trim().toLowerCase();
+  if (fallback === "image/jpg") return "image/jpeg";
+  return VISION_MEDIA_TYPES.has(fallback) ? fallback : null;
+}
+
+async function encodeImage(uri: string): Promise<PayloadImage> {
+  const response = await fetch(uri);
+  if (!response.ok) throw new Error("image read failed");
+  const bytes = new Uint8Array(await response.arrayBuffer());
+  if (!bytes.length || bytes.byteLength > MAX_LOCAL_IMAGE_BYTES) throw new Error("image too large");
+  const mediaType = mediaTypeFromBytes(bytes, response.headers.get("content-type"));
+  if (!mediaType) throw new Error("unsupported image");
+  return { media_type: mediaType, data: bytesToBase64(bytes) };
+}
+
 function coerceTextList(raw: unknown, limit: number): string[] {
   const chunks: string[] = [];
   if (typeof raw === "string") {
@@ -81,19 +136,40 @@ export async function requestReply({
   entry: EntryMode;
   messages: ChatMessage[];
 }): Promise<ChatReply> {
+  const spoken = messages.filter((message) => message.role === "user" || message.role === "assistant");
+  const lastUserIndex = spoken.reduce(
+    (found, message, index) => (message.role === "user" ? index : found),
+    -1,
+  );
+  const payload = [];
+  for (let index = 0; index < spoken.length; index += 1) {
+    const message = spoken[index];
+    const text =
+      message.role === "assistant" && message.meal
+        ? `${message.text}\nRecommendation: ${message.meal.title}. ${message.meal.time}. ${message.meal.benefit}`
+        : message.text;
+    const includeImage = message.role === "user" && Boolean(message.image) && index === lastUserIndex;
+    if (message.role === "user" && !text.trim() && !includeImage) continue;
+    if (message.role !== "user" && message.role !== "assistant") continue;
+    const item: {
+      role: "user" | "assistant";
+      content: string;
+      image?: PayloadImage;
+    } = {
+      role: message.role,
+      content: text,
+    };
+    if (includeImage && message.image) {
+      item.image = await encodeImage(message.image);
+    }
+    payload.push(item);
+  }
   const response = await fetch(`${apiBaseUrl()}/api/chat`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       entry,
-      messages: messages
-        .filter((message) => message.role === "user" || message.role === "assistant")
-        .map((message) => ({
-          role: message.role,
-          content: message.meal
-            ? `${message.text}\nRecommendation: ${message.meal.title}. ${message.meal.time}. ${message.meal.benefit}`
-            : message.text,
-        })),
+      messages: payload,
     }),
   });
   const data = (await response.json().catch(() => null)) as {

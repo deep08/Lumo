@@ -27,6 +27,7 @@ export const colors = {
 } as const;
 
 export const radius = {
+  xs: 12,
   sm: 16,
   md: 24,
   tail: 6,
@@ -43,5 +44,6 @@ export const space = {
 
 export const fonts = {
   heading: "Georgia",
+  wordmark: "Lora-Bold",
   body: "System",
 } as const;
