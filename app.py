@@ -1,11 +1,34 @@
-from flask import Flask, request
+from flask import Flask, jsonify, request
 from twilio.twiml.messaging_response import MessagingResponse
 from twilio.rest import Client as TwilioClient
 import anthropic
+import json
 import os
+import re
 import threading
 from datetime import datetime, date
 from supabase import create_client
+
+def load_local_env(path=None):
+    env_path = path or os.path.join(os.path.dirname(os.path.abspath(__file__)), ".env")
+    if not os.path.isfile(env_path):
+        return
+    with open(env_path, encoding="utf-8") as handle:
+        for raw_line in handle:
+            line = raw_line.strip()
+            if not line or line.startswith("#") or "=" not in line:
+                continue
+            name, value = line.split("=", 1)
+            name = name.strip()
+            if name.startswith("export "):
+                name = name[len("export "):].strip()
+            value = value.strip()
+            if len(value) >= 2 and value[0] == value[-1] and value[0] in {"'", '"'}:
+                value = value[1:-1]
+            if name and value and name not in os.environ:
+                os.environ[name] = value
+
+load_local_env()
 
 app = Flask(__name__)
 conversations = {}
@@ -1671,6 +1694,210 @@ def process_and_reply(user_message, user_number):
     except Exception as e:
         print(f"Error: {e}")
         send_whatsapp(user_number, "Ek second — kuch issue aa gaya. Dobara try karein! 😊")
+
+ENTRY_MODES = {
+    "Make my meals healthier": "Level 1. Learn the meal they already eat, then one small improvement. Move to Level 2 only if they ask.",
+    "Cook with my ingredients": "Level 1. The named ingredients are options. Recommend one familiar, simple home-style dish. Do not combine foods just because they are available.",
+}
+MAX_MODEL_TURNS = 12
+MAX_CONTEXT_TURNS = 40
+
+
+def web_behavior_text():
+    path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "lumo-behavior.md")
+    with open(path, encoding="utf-8") as handle:
+        return handle.read().strip()
+
+
+def normalize_chat_messages(raw_messages):
+    if not isinstance(raw_messages, list):
+        return []
+    cleaned = []
+    for item in raw_messages[-MAX_CONTEXT_TURNS:]:
+        if not isinstance(item, dict):
+            continue
+        role = item.get("role")
+        content = item.get("content")
+        if role not in ("user", "assistant") or not isinstance(content, str):
+            continue
+        text = content.strip()
+        if not text:
+            continue
+        message = {"role": role, "content": text[:2000]}
+        if cleaned and cleaned[-1]["role"] == role:
+            cleaned[-1]["content"] = f"{cleaned[-1]['content']}\n{message['content']}"[:2000]
+        else:
+            cleaned.append(message)
+    while cleaned and cleaned[0]["role"] != "user":
+        cleaned.pop(0)
+    return cleaned
+
+
+def meal_context(entry, messages):
+    included = {id(message) for message in recent_model_turns(messages)}
+    facts = [
+        message["content"]
+        for message in messages
+        if message["role"] == "user"
+        and id(message) not in included
+        and message["content"] != entry
+    ]
+    if not facts:
+        return "None yet."
+    return " | ".join(facts[-4:])
+
+
+def recent_model_turns(messages):
+    history = messages[-MAX_MODEL_TURNS:]
+    while history and history[0]["role"] != "user":
+        history = history[1:]
+    return history
+
+
+def web_chat_system(entry, context):
+    label = entry if entry in ENTRY_MODES else "Not selected"
+    mode = ENTRY_MODES.get(label, "General meal help.")
+    return (
+        web_behavior_text()
+        + "\n\nThis conversation:\n"
+        + f"Entry mode: {label}\n"
+        + f"What this mode means: {mode}\n"
+        + "If Entry mode is Not selected, ignore the two journey opening questions. Answer the user's typed question with practical food advice in this reply. Give one or two small everyday changes, then stop. Do not ask for ingredients. Do not ask what they usually eat for breakfast, lunch, or dinner. Do not ask which meal they want to improve. Do not offer Make my meals healthier or Cook with my ingredients as chips. Do not add a follow-up question.\n"
+        + f"Earlier meal context from this chat: {context}\n"
+        + "Reply with one JSON object and nothing else.\n"
+        + "A question uses text and chips only. Omit meal_card.\n"
+        + "Before replying, choose one action: ask, recommend, continue, or stop.\n"
+        + "Ask one short question only when a missing fact would change the recommendation. Do not repeat a question already answered.\n"
+        + "When enough is known, recommend one practical meal immediately. Do not ask an optional question first.\n"
+        + "A recommendation uses one short text introduction and one meal_card. "
+        + "Do not repeat the meal title, time, or explanation in text.\n"
+        + "After a recommendation, let the card carry the next action. Do not add a generic follow-up question.\n"
+        + "For Cook with my ingredients, the named foods are options, not a checklist. When they are already named, recommend one familiar Indian home-style dish immediately. Do not ask which dish they want. Use one main ingredient when that makes a practical dish. Combine foods only when a familiar recipe already uses them together. Do not invent combinations such as paneer with tori. The recipe may use oil, salt, and basic spices only. Do not treat any other unconfirmed food as available.\n"
+        + "When the user says Change meal, suggest a different familiar simple dish. Do not combine foods just to make it different. Exclude the previous dish and rejected ingredients.\n"
+        + "For a complete meal, add only what complements the current dish. Do not use every available ingredient. Ask about one missing ingredient only when the meal needs it.\n"
+        + 'meal_card is {"type":"improvement" or "complete_meal","title":"","time":"","benefit":"","recipe":{"ingredients":[],"steps":[]}}.\n'
+        + "Use improvement on Level 1 and complete_meal on Level 2.\n"
+        + "Include a recipe only with a meal_card. ingredients is a short list with quantities where useful. steps is 3 to 5 short English instructions.\n"
+        + "Use confirmed ingredients. Do not treat an unconfirmed ingredient as already available.\n"
+        + "Put chips only when the behavior allows them.\n"
+    )
+
+
+def parse_recipe(raw):
+    if not isinstance(raw, dict):
+        return None
+    ingredients = raw.get("ingredients")
+    steps = raw.get("steps")
+    if not isinstance(ingredients, list) or not isinstance(steps, list):
+        return None
+    cleaned_ingredients = [
+        item.strip()[:80]
+        for item in ingredients[:8]
+        if isinstance(item, str) and item.strip()
+    ]
+    cleaned_steps = [
+        item.strip()[:200]
+        for item in steps[:5]
+        if isinstance(item, str) and item.strip()
+    ]
+    if not cleaned_ingredients or len(cleaned_steps) < 3:
+        return None
+    return {"ingredients": cleaned_ingredients, "steps": cleaned_steps}
+
+
+def parse_meal_card(raw):
+    if not isinstance(raw, dict):
+        return None
+    meal_type = raw.get("type")
+    title = raw.get("title")
+    time = raw.get("time")
+    benefit = raw.get("benefit")
+    if meal_type not in ("improvement", "complete_meal"):
+        return None
+    if not all(isinstance(value, str) and value.strip() for value in (title, time, benefit)):
+        return None
+    meal = {
+        "type": meal_type,
+        "title": title.strip()[:120],
+        "time": time.strip()[:40],
+        "benefit": benefit.strip()[:240],
+    }
+    recipe = parse_recipe(raw.get("recipe"))
+    if recipe:
+        meal["recipe"] = recipe
+    return meal
+
+
+def parse_chat_response(raw):
+    text = raw.strip()
+    fenced = re.fullmatch(r"```(?:json)?\s*(.*?)\s*```", text, flags=re.DOTALL)
+    if fenced:
+        text = fenced.group(1).strip()
+    data = json.loads(text)
+    if not isinstance(data, dict):
+        raise ValueError("response must be an object")
+    message = data.get("text")
+    if not isinstance(message, str) or not message.strip():
+        raise ValueError("text is required")
+    chips = data.get("chips", [])
+    if chips is None:
+        chips = []
+    if not isinstance(chips, list) or len(chips) > 4:
+        raise ValueError("chips must be a short list")
+    cleaned_chips = []
+    for chip in chips:
+        if not isinstance(chip, str):
+            raise ValueError("chip must be text")
+        label = chip.strip()
+        if not label or len(label) > 40:
+            raise ValueError("chip must be short")
+        cleaned_chips.append(label)
+    reply = {"text": message.strip()[:1200], "chips": cleaned_chips}
+    meal_card = parse_meal_card(data.get("meal_card"))
+    if meal_card:
+        reply["meal_card"] = meal_card
+    return reply
+
+
+def request_claude_reply(system, history):
+    client = anthropic.Anthropic(api_key=os.environ.get("ANTHROPIC_API_KEY"))
+    reminder = ""
+    for _ in range(2):
+        response = client.messages.create(
+            model="claude-sonnet-4-5",
+            max_tokens=1000,
+            system=system + reminder,
+            messages=history,
+        )
+        try:
+            return parse_chat_response(response.content[0].text)
+        except (ValueError, json.JSONDecodeError, IndexError, AttributeError):
+            reminder = "\nYour previous reply was not valid JSON. Return only the JSON object."
+    return {
+        "text": "Tell me a little more about this meal and I’ll suggest one.",
+        "chips": [],
+    }
+
+
+@app.route("/api/chat", methods=["POST"])
+def api_chat():
+    payload = request.get_json(silent=True) or {}
+    entry = payload.get("entry")
+    if entry not in ENTRY_MODES:
+        entry = None
+    messages = normalize_chat_messages(payload.get("messages"))
+    history = recent_model_turns(messages)
+    if not history:
+        return jsonify({"error": "A user message is required."}), 400
+    try:
+        reply = request_claude_reply(web_chat_system(entry, meal_context(entry, messages)), history)
+    except Exception as error:
+        secret = os.environ.get("ANTHROPIC_API_KEY") or ""
+        detail = str(error).replace(secret, "[redacted]") if secret else str(error)
+        print(f"Web chat error: {type(error).__name__}: {detail[:200]}")
+        return jsonify({"error": "Lumo could not reply."}), 502
+    return jsonify(reply)
+
 
 @app.route("/webhook", methods=["POST"])
 def webhook():

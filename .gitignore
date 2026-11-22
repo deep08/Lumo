@@ -1,0 +1,21 @@
+# Environment variables and API keys
+.env
+.env.*
+!.env.example
+
+# Dependencies
+node_modules/
+frontend/node_modules/
+
+# macOS
+.DS_Store
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+
+# Build files
+dist/
+frontend/dist/
+.expo/
