@@ -1777,30 +1777,36 @@ def web_chat_system(entry, context):
         + "For a complete meal, add only what complements the current dish. Do not use every available ingredient. Ask about one missing ingredient only when the meal needs it.\n"
         + 'meal_card is {"type":"improvement" or "complete_meal","title":"","time":"","benefit":"","recipe":{"ingredients":[],"steps":[]}}.\n'
         + "Use improvement on Level 1 and complete_meal on Level 2.\n"
-        + "Include a recipe only with a meal_card. ingredients is a short list with quantities where useful. steps is 3 to 5 short English instructions.\n"
+        + "A meal_card must include recipe. ingredients is an array of short strings, with quantities where useful. steps is an array of 3 to 5 short English instructions. Never omit recipe, and never send ingredients or steps as one string.\n"
         + "Use confirmed ingredients. Do not treat an unconfirmed ingredient as already available.\n"
         + "Put chips only when the behavior allows them.\n"
     )
 
 
+def coerce_text_list(raw, limit, item_max):
+    chunks = []
+    if isinstance(raw, str):
+        chunks = [part.strip() for part in re.split(r"[\n;]+", raw) if part.strip()]
+        if len(chunks) == 1 and "," in chunks[0]:
+            chunks = [part.strip() for part in chunks[0].split(",") if part.strip()]
+    elif isinstance(raw, list):
+        for item in raw:
+            if isinstance(item, str) and item.strip():
+                chunks.append(item.strip())
+    cleaned = []
+    for item in chunks[:limit]:
+        line = re.sub(r"^\d+[\.)]\s*", "", item).strip()
+        if line:
+            cleaned.append(line[:item_max])
+    return cleaned
+
+
 def parse_recipe(raw):
     if not isinstance(raw, dict):
         return None
-    ingredients = raw.get("ingredients")
-    steps = raw.get("steps")
-    if not isinstance(ingredients, list) or not isinstance(steps, list):
-        return None
-    cleaned_ingredients = [
-        item.strip()[:80]
-        for item in ingredients[:8]
-        if isinstance(item, str) and item.strip()
-    ]
-    cleaned_steps = [
-        item.strip()[:200]
-        for item in steps[:5]
-        if isinstance(item, str) and item.strip()
-    ]
-    if not cleaned_ingredients or len(cleaned_steps) < 3:
+    cleaned_ingredients = coerce_text_list(raw.get("ingredients"), 8, 80)
+    cleaned_steps = coerce_text_list(raw.get("steps"), 5, 200)
+    if not cleaned_ingredients or not cleaned_steps:
         return None
     return {"ingredients": cleaned_ingredients, "steps": cleaned_steps}
 

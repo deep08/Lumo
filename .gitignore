@@ -18,4 +18,11 @@ __pycache__/
 # Build files
 dist/
 frontend/dist/
+
+# Expo / mobile
 .expo/
+mobile/.expo/
+mobile/dist/
+mobile/web-build/
+mobile/expo-env.d.ts
+*.tsbuildinfo
