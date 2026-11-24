@@ -5,7 +5,7 @@ import EntryCard from "../components/EntryCard";
 import { colors, fonts, space } from "../theme";
 import { JOURNEYS, JourneyTitle } from "../types";
 
-const mascot = require("../assets/mascot.png");
+const mascot = require("../assets/mascot-splash.png");
 
 const entries = [
   {

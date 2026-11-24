@@ -199,7 +199,7 @@ const styles = StyleSheet.create({
   },
   timeRow: {
     flexDirection: "row",
-    alignItems: "flex-start",
+    alignItems: "center",
     gap: space[4],
   },
   clock: {

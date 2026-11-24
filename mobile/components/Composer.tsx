@@ -25,6 +25,7 @@ const MAX_CONTENT_HEIGHT = 144;
 const CONTENT_PAD_Y = space[4];
 const MAX_TEXT_HEIGHT = MAX_CONTENT_HEIGHT - CONTENT_PAD_Y * 2;
 const GLASS_BLUR_INTENSITY = 24;
+const MENU_GLASS_BLUR_INTENSITY = 20;
 const PICKER_DELAY = 300;
 const IMAGE_LIMIT_MESSAGE = "You can attach up to 5 photos.";
 const PICKER_OPTIONS: ImagePicker.ImagePickerOptions = {
@@ -58,6 +59,22 @@ function ComposerGlass() {
         />
       ) : null}
       <View pointerEvents="none" style={styles.glassFill} />
+    </>
+  );
+}
+
+function MenuGlass() {
+  return (
+    <>
+      {Platform.OS === "ios" ? (
+        <BlurView
+          pointerEvents="none"
+          tint="light"
+          intensity={MENU_GLASS_BLUR_INTENSITY}
+          style={styles.menuGlassBlur}
+        />
+      ) : null}
+      <View pointerEvents="none" style={styles.menuGlassFill} />
     </>
   );
 }
@@ -358,22 +375,25 @@ export default function Composer({
       <View style={styles.composerWrap}>
         {menuOpen ? (
           <View style={styles.menu}>
-            <Pressable
-              accessibilityLabel="Take a photo"
-              onPress={() => pickAfterClose(openCamera)}
-              style={({ pressed }) => [styles.menuItem, pressed && styles.menuItemPressed]}
-            >
-              <CameraIcon />
-              <Text style={styles.menuLabel}>Take a photo</Text>
-            </Pressable>
-            <Pressable
-              accessibilityLabel="Choose from gallery"
-              onPress={() => pickAfterClose(openLibrary)}
-              style={({ pressed }) => [styles.menuItem, pressed && styles.menuItemPressed]}
-            >
-              <GalleryIcon />
-              <Text style={styles.menuLabel}>Choose from gallery</Text>
-            </Pressable>
+            <View style={styles.menuSurface}>
+              <MenuGlass />
+              <Pressable
+                accessibilityLabel="Take a photo"
+                onPress={() => pickAfterClose(openCamera)}
+                style={({ pressed }) => [styles.menuItem, pressed && styles.menuItemPressed]}
+              >
+                <CameraIcon />
+                <Text style={styles.menuLabel}>Take a photo</Text>
+              </Pressable>
+              <Pressable
+                accessibilityLabel="Choose from gallery"
+                onPress={() => pickAfterClose(openLibrary)}
+                style={({ pressed }) => [styles.menuItem, pressed && styles.menuItemPressed]}
+              >
+                <GalleryIcon />
+                <Text style={styles.menuLabel}>Choose from gallery</Text>
+              </Pressable>
+            </View>
           </View>
         ) : null}
         {measureWidth > 0 ? (
@@ -642,30 +662,53 @@ const styles = StyleSheet.create({
   },
   menu: {
     position: "absolute",
-    left: 0,
+    left: -4,
     bottom: "100%",
     zIndex: 3,
-    width: 178,
-    padding: space[8],
-    borderRadius: radius.sm,
-    backgroundColor: colors.surfaceDefault,
+    width: 176,
+    marginBottom: 6,
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.04,
     shadowRadius: 12,
     elevation: 3,
   },
+  menuSurface: {
+    width: 176,
+    padding: space[8],
+    borderRadius: radius.sm,
+    borderWidth: 1,
+    borderColor: colors.glassBorder,
+    overflow: "hidden",
+  },
+  menuGlassBlur: {
+    position: "absolute",
+    top: 0,
+    right: 0,
+    bottom: 0,
+    left: 0,
+    borderRadius: radius.sm,
+  },
+  menuGlassFill: {
+    position: "absolute",
+    top: 0,
+    right: 0,
+    bottom: 0,
+    left: 0,
+    backgroundColor: colors.glassFill,
+    borderRadius: radius.sm,
+  },
   menuItem: {
     flexDirection: "row",
     alignItems: "center",
     gap: space[8],
-    width: 162,
+    alignSelf: "stretch",
     height: 40,
     padding: space[8],
     borderRadius: radius.md,
   },
   menuItemPressed: {
-    backgroundColor: colors.surfaceHover,
+    backgroundColor: colors.surfaceElevated,
   },
   menuLabel: {
     color: colors.contentSecondary,

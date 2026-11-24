@@ -5,7 +5,11 @@ const cameraSrc = require("../assets/icon-camera.png");
 const gallerySrc = require("../assets/icon-gallery.png");
 
 export function BackIcon() {
-  return <Text style={styles.back}>‹</Text>;
+  return (
+    <View style={styles.backWrap}>
+      <View style={styles.backChevron} />
+    </View>
+  );
 }
 
 export function MoreIcon() {
@@ -52,12 +56,21 @@ export function SendIcon({ disabled }: { disabled: boolean }) {
 }
 
 const styles = StyleSheet.create({
-  back: {
-    color: "#1E2A18",
-    fontSize: 28,
-    lineHeight: 28,
-    fontWeight: "500",
-    marginTop: -2,
+  backWrap: {
+    width: 24,
+    height: 24,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  backChevron: {
+    width: 9,
+    height: 9,
+    marginRight: 2,
+    borderLeftWidth: 2,
+    borderBottomWidth: 2,
+    borderColor: colors.headerIcon,
+    borderRadius: 1,
+    transform: [{ rotate: "45deg" }],
   },
   more: {
     width: 24,
@@ -71,7 +84,7 @@ const styles = StyleSheet.create({
     width: 4,
     height: 4,
     borderRadius: 2,
-    backgroundColor: "#3A3A39",
+    backgroundColor: colors.headerIcon,
   },
   add: {
     width: 24,

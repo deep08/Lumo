@@ -7,7 +7,7 @@
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
     "splash": {
-      "backgroundColor": "#FAF8F8"
+      "backgroundColor": "#FFFFFE"
     },
     "plugins": [
       [

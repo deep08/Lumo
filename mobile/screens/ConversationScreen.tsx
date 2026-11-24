@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type ElementRef } from "react";
 import {
   Image,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -8,7 +9,8 @@ import {
   View,
   type LayoutChangeEvent,
 } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { BlurView } from "expo-blur";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Composer from "../components/Composer";
 import { BackIcon, MoreIcon } from "../components/Icons";
 import ImageViewer from "../components/ImageViewer";
@@ -17,8 +19,28 @@ import RecommendationCard from "../components/RecommendationCard";
 import { colors, radius, space } from "../theme";
 import { ChatMessage, ConversationPhase, messageImageUris } from "../types";
 
+const HEADER_BLUR_INTENSITY = 20;
+const HEADER_ROW_HEIGHT = 52;
+const HEADER_BUTTON_HIT_SLOP = 4;
+
 const CHANGE_MEAL_CHIP = /^change meal$/i;
 const COMPLETE_MEAL_CHIP = /^make it a complete meal$/i;
+
+function HeaderGlass() {
+  return (
+    <>
+      {Platform.OS === "ios" ? (
+        <BlurView
+          pointerEvents="none"
+          tint="light"
+          intensity={HEADER_BLUR_INTENSITY}
+          style={styles.headerGlassBlur}
+        />
+      ) : null}
+      <View pointerEvents="none" style={styles.headerGlassFill} />
+    </>
+  );
+}
 
 function visibleChips(message: ChatMessage) {
   return (message.chips ?? []).filter((label) => {
@@ -55,10 +77,13 @@ export default function ConversationScreen({
   onToggleRecipe,
   onBack,
 }: ConversationScreenProps) {
+  const insets = useSafeAreaInsets();
   const threadRef = useRef<ElementRef<typeof ScrollView>>(null);
   const [viewerUri, setViewerUri] = useState<string | null>(null);
+  const [headerHeight, setHeaderHeight] = useState(0);
   const [composerHeight, setComposerHeight] = useState(0);
   const latestChipId = [...messages].reverse().find((message) => message.chips)?.id;
+  const threadTopPad = headerHeight > 0 ? headerHeight : insets.top + HEADER_ROW_HEIGHT;
 
   useEffect(() => {
     threadRef.current?.scrollToEnd({ animated: true });
@@ -66,6 +91,11 @@ export default function ConversationScreen({
 
   function keepLatestMessageVisible() {
     threadRef.current?.scrollToEnd({ animated: true });
+  }
+
+  function handleHeaderLayout(event: LayoutChangeEvent) {
+    const height = event.nativeEvent.layout.height;
+    setHeaderHeight((current) => (Math.abs(current - height) > 0.5 ? height : current));
   }
 
   function handleComposerLayout(event: LayoutChangeEvent) {
@@ -76,28 +106,12 @@ export default function ConversationScreen({
 
   return (
     <View style={styles.screen}>
-      <SafeAreaView edges={["top"]} style={styles.headerSafe}>
-        <View style={styles.header}>
-          <Pressable
-            accessibilityLabel="Back"
-            onPress={onBack}
-            style={({ pressed }) => [styles.headerButton, pressed && styles.headerPressed]}
-          >
-            <BackIcon />
-          </Pressable>
-          <Pressable
-            accessibilityLabel="More"
-            style={({ pressed }) => [styles.headerButton, pressed && styles.headerPressed]}
-          >
-            <MoreIcon />
-          </Pressable>
-        </View>
-      </SafeAreaView>
       <ScrollView
         ref={threadRef}
         style={styles.thread}
         contentContainerStyle={[
           styles.threadContent,
+          { paddingTop: threadTopPad },
           composerHeight > 0 ? { paddingBottom: composerHeight } : null,
         ]}
         keyboardShouldPersistTaps="handled"
@@ -175,6 +189,32 @@ export default function ConversationScreen({
           );
         })}
       </ScrollView>
+      <View
+        pointerEvents="box-none"
+        onLayout={handleHeaderLayout}
+        style={styles.headerDock}
+      >
+        <HeaderGlass />
+        <View pointerEvents="box-none" style={{ paddingTop: insets.top }}>
+          <View style={styles.header}>
+            <Pressable
+              accessibilityLabel="Back"
+              hitSlop={HEADER_BUTTON_HIT_SLOP}
+              onPress={onBack}
+              style={({ pressed }) => [styles.headerButton, pressed && styles.headerPressed]}
+            >
+              <BackIcon />
+            </Pressable>
+            <Pressable
+              accessibilityLabel="More"
+              hitSlop={HEADER_BUTTON_HIT_SLOP}
+              style={({ pressed }) => [styles.headerButton, pressed && styles.headerPressed]}
+            >
+              <MoreIcon />
+            </Pressable>
+          </View>
+        </View>
+      </View>
       <View pointerEvents="box-none" style={styles.composerDock}>
         <Composer
           tray
@@ -194,34 +234,46 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: colors.surfaceBase,
   },
-  headerSafe: {
-    backgroundColor: colors.surfaceBase,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.04,
-    shadowRadius: 6,
-    elevation: 2,
-    zIndex: 1,
+  headerDock: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    zIndex: 2,
+  },
+  headerGlassBlur: {
+    position: "absolute",
+    top: 0,
+    right: 0,
+    bottom: 0,
+    left: 0,
+  },
+  headerGlassFill: {
+    position: "absolute",
+    top: 0,
+    right: 0,
+    bottom: 0,
+    left: 0,
+    backgroundColor: colors.headerGlass,
   },
   header: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    paddingVertical: 4,
-    paddingHorizontal: space[8],
-    backgroundColor: colors.surfaceBase,
+    height: HEADER_ROW_HEIGHT,
+    padding: space[8],
   },
   headerButton: {
-    width: 40,
-    height: 40,
+    width: 36,
+    height: 36,
     alignItems: "center",
     justifyContent: "center",
-    borderRadius: radius.pill,
-    backgroundColor: colors.surfaceBase,
+    borderRadius: 20,
+    backgroundColor: colors.headerButton,
+    overflow: "hidden",
   },
   headerPressed: {
-    backgroundColor: colors.surfaceHover,
-    transform: [{ scale: 0.95 }],
+    backgroundColor: "rgba(242, 241, 241, 0.55)",
   },
   thread: {
     flex: 1,

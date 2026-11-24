@@ -16,7 +16,21 @@ let sequence = 0;
 
 function nextId() {
   sequence += 1;
-  return `m${sequence}`;
+  const randomUUID = globalThis.crypto?.randomUUID?.bind(globalThis.crypto);
+  if (randomUUID) return randomUUID();
+  return `m${Date.now().toString(36)}-${sequence}`;
+}
+
+function assertUniqueMessageIds(messages: ChatMessage[]) {
+  if (!__DEV__) return;
+  const seen = new Set<string>();
+  for (const message of messages) {
+    if (seen.has(message.id)) {
+      console.warn(`Duplicate chat message id: ${message.id}`);
+      return;
+    }
+    seen.add(message.id);
+  }
 }
 
 function userMessage(text: string, images?: string[] | string | null): ChatMessage {
@@ -84,6 +98,12 @@ export default function App() {
   const requestRef = useRef(0);
   conversationRef.current = conversation;
 
+  function commitConversation(next: ConversationState) {
+    assertUniqueMessageIds(next.messages);
+    conversationRef.current = next;
+    setConversation(next);
+  }
+
   useEffect(() => {
     const fallback = setTimeout(() => {
       setView((current) => (current === "splash" ? "welcome" : current));
@@ -107,28 +127,23 @@ export default function App() {
       entry,
       messages: [...messages, statusMessage()],
     };
-    conversationRef.current = loading;
-    setConversation(loading);
+    commitConversation(loading);
     requestReply({ entry, messages })
       .then((reply) => {
         if (requestRef.current !== requestId) return;
-        const next: ConversationState = {
+        commitConversation({
           phase: "ready",
           entry,
           messages: [...messages, assistantMessage(reply.text, reply.chips, reply.meal ?? undefined)],
-        };
-        conversationRef.current = next;
-        setConversation(next);
+        });
       })
       .catch(() => {
         if (requestRef.current !== requestId) return;
-        const next: ConversationState = {
+        commitConversation({
           phase: "ready",
           entry,
           messages: [...messages, assistantMessage(ERROR_TEXT)],
-        };
-        conversationRef.current = next;
-        setConversation(next);
+        });
       });
   }
 
@@ -168,9 +183,7 @@ export default function App() {
   }
 
   function toggleMessageRecipe(messageId: string) {
-    const next = toggleRecipe(conversationRef.current, messageId);
-    conversationRef.current = next;
-    setConversation(next);
+    commitConversation(toggleRecipe(conversationRef.current, messageId));
   }
 
   return (
