@@ -7,7 +7,7 @@ import ImageViewer from "../components/ImageViewer";
 import Loader from "../components/Loader";
 import RecommendationCard from "../components/RecommendationCard";
 import { colors, radius, space } from "../theme";
-import { ChatMessage, ConversationPhase } from "../types";
+import { ChatMessage, ConversationPhase, messageImageUris } from "../types";
 
 const CHANGE_MEAL_CHIP = /^change meal$/i;
 const COMPLETE_MEAL_CHIP = /^make it a complete meal$/i;
@@ -29,7 +29,7 @@ type ConversationScreenProps = {
   phase: ConversationPhase;
   draft: string;
   onDraftChange: (value: string) => void;
-  onSend: (value: string, imageUri?: string | null) => void;
+  onSend: (value: string, imageUris?: string[]) => void;
   onChip: (label: string) => void;
   onChangeMeal: () => void;
   onToggleRecipe: (messageId: string) => void;
@@ -88,19 +88,24 @@ export default function ConversationScreen({
           if (message.role === "user") {
             return (
               <View key={message.id} style={styles.turnUser}>
-                {message.image ? (
-                  <Pressable
-                    accessibilityLabel="View photo"
-                    onPress={() => setViewerUri(message.image ?? null)}
-                    style={styles.userImageHit}
-                  >
-                    <Image
-                      source={{ uri: message.image }}
-                      style={styles.userImage}
-                      resizeMode="cover"
-                      accessibilityIgnoresInvertColors
-                    />
-                  </Pressable>
+                {messageImageUris(message).length ? (
+                  <View style={styles.userImages}>
+                    {messageImageUris(message).map((uri, index) => (
+                      <Pressable
+                        key={`${uri}-${index}`}
+                        accessibilityLabel="View photo"
+                        onPress={() => setViewerUri(uri)}
+                        style={styles.userImageHit}
+                      >
+                        <Image
+                          source={{ uri }}
+                          style={styles.userImage}
+                          resizeMode="cover"
+                          accessibilityIgnoresInvertColors
+                        />
+                      </Pressable>
+                    ))}
+                  </View>
                 ) : null}
                 {message.text ? (
                   <View style={styles.userBubble}>
@@ -212,6 +217,13 @@ const styles = StyleSheet.create({
     width: "100%",
     alignItems: "flex-end",
     gap: space[8],
+  },
+  userImages: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    justifyContent: "flex-end",
+    gap: space[8],
+    maxWidth: "80%",
   },
   userImageHit: {
     width: 64,

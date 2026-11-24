@@ -1,5 +1,5 @@
 import { NativeModules } from "react-native";
-import { ChatMessage, EntryMode, MealCard, MealRecipe } from "../types";
+import { ChatMessage, EntryMode, MAX_CHAT_IMAGES, MealCard, MealRecipe, messageImageUris } from "../types";
 
 const API_PORT = 5001;
 const ERROR_TEXT = "I couldn’t reach Lumo just now. Send that again.";
@@ -148,19 +148,26 @@ export async function requestReply({
       message.role === "assistant" && message.meal
         ? `${message.text}\nRecommendation: ${message.meal.title}. ${message.meal.time}. ${message.meal.benefit}`
         : message.text;
-    const includeImage = message.role === "user" && Boolean(message.image) && index === lastUserIndex;
+    const includeImage =
+      message.role === "user" && messageImageUris(message).length > 0 && index === lastUserIndex;
     if (message.role === "user" && !text.trim() && !includeImage) continue;
     if (message.role !== "user" && message.role !== "assistant") continue;
     const item: {
       role: "user" | "assistant";
       content: string;
       image?: PayloadImage;
+      images?: PayloadImage[];
     } = {
       role: message.role,
       content: text,
     };
-    if (includeImage && message.image) {
-      item.image = await encodeImage(message.image);
+    if (includeImage) {
+      const encoded = [];
+      for (const uri of messageImageUris(message).slice(0, MAX_CHAT_IMAGES)) {
+        encoded.push(await encodeImage(uri));
+      }
+      if (encoded.length === 1) item.image = encoded[0];
+      if (encoded.length) item.images = encoded;
     }
     payload.push(item);
   }

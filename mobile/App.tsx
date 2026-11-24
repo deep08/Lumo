@@ -8,7 +8,7 @@ import ConversationScreen from "./screens/ConversationScreen";
 import SplashScreen from "./screens/SplashScreen";
 import WelcomeScreen from "./screens/WelcomeScreen";
 import { colors, fonts } from "./theme";
-import { ChatMessage, ConversationState, EntryMode, JourneyTitle } from "./types";
+import { ChatMessage, ConversationState, EntryMode, JourneyTitle, MAX_CHAT_IMAGES } from "./types";
 
 const SPLASH_MS = 1600;
 
@@ -19,9 +19,15 @@ function nextId() {
   return `m${sequence}`;
 }
 
-function userMessage(text: string, image?: string | null): ChatMessage {
+function userMessage(text: string, images?: string[] | string | null): ChatMessage {
   const message: ChatMessage = { id: nextId(), role: "user", text };
-  if (image) message.image = image;
+  const uris = (Array.isArray(images) ? images : images ? [images] : [])
+    .filter(Boolean)
+    .slice(0, MAX_CHAT_IMAGES);
+  if (uris.length) {
+    message.images = uris;
+    message.image = uris[0];
+  }
   return message;
 }
 
@@ -133,14 +139,14 @@ export default function App() {
     ask(title, [userMessage(title)]);
   }
 
-  function sendMessage(text: string, imageUri?: string | null) {
+  function sendMessage(text: string, imageUris: string[] = []) {
     const trimmed = text.trim();
-    const image = imageUri || null;
+    const images = imageUris.filter(Boolean).slice(0, MAX_CHAT_IMAGES);
     const current = conversationRef.current;
-    if ((!trimmed && !image) || current.phase === "loading") return;
+    if ((!trimmed && !images.length) || current.phase === "loading") return;
     setDraft("");
     setView("conversation");
-    const nextUser = userMessage(trimmed, image);
+    const nextUser = userMessage(trimmed, images);
     const history =
       view === "welcome" ? [nextUser] : [...spokenMessages(current.messages), nextUser];
     ask(view === "welcome" ? null : current.entry, history);

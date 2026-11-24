@@ -1,9 +1,11 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ElementRef } from "react";
 import {
+  Alert,
   Image,
   Keyboard,
   Platform,
   Pressable,
+  ScrollView,
   StyleSheet,
   Text,
   TextInput,
@@ -14,15 +16,16 @@ import {
 import * as ImagePicker from "expo-image-picker";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { colors, radius, space } from "../theme";
+import { MAX_CHAT_IMAGES } from "../types";
 import { AddIcon, CameraIcon, GalleryIcon, SendIcon } from "./Icons";
 
 const LINE_HEIGHT = 24;
 const MAX_TEXT_HEIGHT = 144;
 const PICKER_DELAY = 300;
+const IMAGE_LIMIT_MESSAGE = "You can attach up to 5 photos.";
 const PICKER_OPTIONS: ImagePicker.ImagePickerOptions = {
   mediaTypes: ["images"],
   allowsEditing: false,
-  allowsMultipleSelection: false,
   quality: 0.7,
   preferredAssetRepresentationMode: ImagePicker.UIImagePickerPreferredAssetRepresentationMode.Compatible,
 };
@@ -30,7 +33,7 @@ const PICKER_OPTIONS: ImagePicker.ImagePickerOptions = {
 type ComposerProps = {
   value: string;
   onChange: (value: string) => void;
-  onSubmit: (value: string, imageUri?: string | null) => void;
+  onSubmit: (value: string, imageUris?: string[]) => void;
   tray?: boolean;
   onLayout?: (event: LayoutChangeEvent) => void;
 };
@@ -49,14 +52,17 @@ export default function Composer({
   const insets = useSafeAreaInsets();
   const inputFocusAt = useRef(0);
   const pendingMenuOpen = useRef(false);
+  const contentScrollRef = useRef<ElementRef<typeof ScrollView>>(null);
   const [keyboardVisible, setKeyboardVisible] = useState(Keyboard.isVisible());
   const [menuOpen, setMenuOpen] = useState(false);
-  const [imageUri, setImageUri] = useState<string | null>(null);
+  const [imageUris, setImageUris] = useState<string[]>([]);
   const [expanded, setExpanded] = useState(false);
   const [measureWidth, setMeasureWidth] = useState(0);
   const [inputHeight, setInputHeight] = useState(LINE_HEIGHT);
   const [scrollable, setScrollable] = useState(false);
-  const canSend = value.trim().length > 0 || Boolean(imageUri);
+  const hasImages = imageUris.length > 0;
+  const canSend = value.trim().length > 0 || hasImages;
+  const stacked = expanded || hasImages;
   const bottomInset = keyboardVisible ? 0 : insets.bottom;
 
   useEffect(() => {
@@ -91,8 +97,8 @@ export default function Composer({
 
   function handleSubmit() {
     if (!canSend) return;
-    onSubmit(value, imageUri);
-    setImageUri(null);
+    onSubmit(value, imageUris);
+    setImageUris([]);
   }
 
   function closeMenu() {
@@ -120,7 +126,7 @@ export default function Composer({
   }
 
   function handleFieldLayout(event: LayoutChangeEvent) {
-    if (expanded) return;
+    if (stacked) return;
     const width = event.nativeEvent.layout.width;
     if (width <= 0) return;
     if (Math.abs(width - measureWidth) > 0.5) setMeasureWidth(width);
@@ -136,13 +142,28 @@ export default function Composer({
     }
     const needsRoom = value.includes("\n") || height > LINE_HEIGHT + 1;
     setExpanded(needsRoom);
-    setInputHeight(needsRoom ? clampedTextHeight(height) : LINE_HEIGHT);
+    if (!needsRoom) {
+      setInputHeight(LINE_HEIGHT);
+      setScrollable(false);
+      return;
+    }
+    if (hasImages) {
+      setInputHeight(Math.max(Math.ceil(height), LINE_HEIGHT));
+      setScrollable(false);
+      return;
+    }
+    setInputHeight(clampedTextHeight(height));
     setScrollable(height > MAX_TEXT_HEIGHT + 0.5);
   }
 
   function handleContentSizeChange(event: TextInputContentSizeChangeEvent) {
     if (!expanded) return;
     const height = event.nativeEvent.contentSize.height;
+    if (hasImages) {
+      setInputHeight(Math.max(Math.ceil(height), LINE_HEIGHT));
+      setScrollable(false);
+      return;
+    }
     setInputHeight(clampedTextHeight(height));
     setScrollable(height > MAX_TEXT_HEIGHT + 0.5);
   }
@@ -159,16 +180,37 @@ export default function Composer({
     }, PICKER_DELAY);
   }
 
+  function showImageLimit() {
+    Alert.alert(IMAGE_LIMIT_MESSAGE);
+  }
+
   async function applyPickerResult(result: ImagePicker.ImagePickerResult) {
-    if (result.canceled || !result.assets?.[0]?.uri) return;
-    setImageUri(result.assets[0].uri);
+    if (result.canceled) return;
+    const picked = (result.assets ?? []).map((asset) => asset.uri).filter(Boolean);
+    if (!picked.length) return;
+    setImageUris((current) => {
+      const room = MAX_CHAT_IMAGES - current.length;
+      if (room <= 0) {
+        showImageLimit();
+        return current;
+      }
+      if (picked.length > room) showImageLimit();
+      return [...current, ...picked.slice(0, room)];
+    });
   }
 
   async function openCamera() {
+    if (imageUris.length >= MAX_CHAT_IMAGES) {
+      showImageLimit();
+      return;
+    }
     try {
       const permission = await ImagePicker.requestCameraPermissionsAsync();
       if (!permission.granted) return;
-      const result = await ImagePicker.launchCameraAsync(PICKER_OPTIONS);
+      const result = await ImagePicker.launchCameraAsync({
+        ...PICKER_OPTIONS,
+        allowsMultipleSelection: false,
+      });
       await applyPickerResult(result);
     } catch {
       return;
@@ -176,10 +218,19 @@ export default function Composer({
   }
 
   async function openLibrary() {
+    if (imageUris.length >= MAX_CHAT_IMAGES) {
+      showImageLimit();
+      return;
+    }
     try {
       const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
       if (!permission.granted) return;
-      const result = await ImagePicker.launchImageLibraryAsync(PICKER_OPTIONS);
+      const remaining = MAX_CHAT_IMAGES - imageUris.length;
+      const result = await ImagePicker.launchImageLibraryAsync({
+        ...PICKER_OPTIONS,
+        allowsMultipleSelection: true,
+        selectionLimit: remaining,
+      });
       await applyPickerResult(result);
     } catch {
       return;
@@ -192,7 +243,7 @@ export default function Composer({
       onPress={handleAddPress}
       style={({ pressed }) => [
         styles.add,
-        expanded && styles.addExpanded,
+        stacked && styles.addExpanded,
         pressed && styles.addPressed,
       ]}
     >
@@ -200,15 +251,73 @@ export default function Composer({
     </Pressable>
   );
 
+  const imagePreview = hasImages ? (
+    <View style={styles.preview}>
+      <ScrollView
+        horizontal
+        nestedScrollEnabled
+        keyboardShouldPersistTaps="handled"
+        showsHorizontalScrollIndicator={false}
+        style={styles.thumbRow}
+        contentContainerStyle={styles.thumbRowContent}
+      >
+        {imageUris.map((uri, index) => (
+          <View key={`${uri}-${index}`} style={styles.thumbWrap}>
+            <Image source={{ uri }} style={styles.thumb} />
+            <Pressable
+              accessibilityLabel="Remove photo"
+              hitSlop={8}
+              onPress={() => setImageUris((current) => current.filter((_, item) => item !== index))}
+              style={styles.remove}
+            >
+              <Text style={styles.removeMark}>×</Text>
+            </Pressable>
+          </View>
+        ))}
+      </ScrollView>
+    </View>
+  ) : null;
+
   const sendButton = (
     <Pressable
       accessibilityLabel="Send message"
       disabled={!canSend}
       onPress={handleSubmit}
-      style={[styles.send, expanded && styles.sendExpanded, !canSend && styles.sendDisabled]}
+      style={[styles.send, stacked && styles.sendExpanded, !canSend && styles.sendDisabled]}
     >
       <SendIcon disabled={!canSend} />
     </Pressable>
+  );
+
+  const field = (
+    <View
+      key="composer-field"
+      onLayout={handleFieldLayout}
+      style={[
+        styles.field,
+        stacked && styles.fieldExpanded,
+        stacked && !hasImages ? { maxHeight: MAX_TEXT_HEIGHT } : null,
+        { height: expanded ? inputHeight : LINE_HEIGHT },
+      ]}
+    >
+      <TextInput
+        multiline
+        scrollEnabled={scrollable}
+        value={value}
+        onChangeText={onChange}
+        onFocus={handleInputFocus}
+        onSubmitEditing={handleSubmit}
+        onContentSizeChange={handleContentSizeChange}
+        placeholder="Tell Lumo about your meal…"
+        placeholderTextColor={colors.contentDisabled}
+        accessibilityLabel="Tell Lumo about your meal"
+        selectionColor={colors.contentOnBrand}
+        returnKeyType="send"
+        submitBehavior="blurAndSubmit"
+        underlineColorAndroid="transparent"
+        style={[styles.input, { height: expanded ? inputHeight : LINE_HEIGHT }]}
+      />
+    </View>
   );
 
   return (
@@ -222,21 +331,6 @@ export default function Composer({
           onPress={dismissMenuAndKeyboard}
           style={styles.screenDismiss}
         />
-      ) : null}
-      {imageUri ? (
-        <View style={styles.preview}>
-          <View style={styles.thumbWrap}>
-            <Image source={{ uri: imageUri }} style={styles.thumb} />
-            <Pressable
-              accessibilityLabel="Remove photo"
-              hitSlop={8}
-              onPress={() => setImageUri(null)}
-              style={styles.remove}
-            >
-              <Text style={styles.removeMark}>×</Text>
-            </Pressable>
-          </View>
-        </View>
       ) : null}
       <View style={styles.composerWrap}>
         {menuOpen ? (
@@ -268,36 +362,32 @@ export default function Composer({
             {value === "" ? " " : value}
           </Text>
         ) : null}
-        <View style={[styles.composer, expanded && styles.composerExpanded]}>
-          {expanded ? null : addButton}
-          <View
-            key="composer-field"
-            onLayout={handleFieldLayout}
-            style={[
-              styles.field,
-              expanded && styles.fieldExpanded,
-              { height: expanded ? inputHeight : LINE_HEIGHT },
-            ]}
-          >
-            <TextInput
-              multiline
-              scrollEnabled={scrollable}
-              value={value}
-              onChangeText={onChange}
-              onFocus={handleInputFocus}
-              onSubmitEditing={handleSubmit}
-              onContentSizeChange={handleContentSizeChange}
-              placeholder="Tell Lumo about your meal…"
-              placeholderTextColor={colors.contentDisabled}
-              accessibilityLabel="Tell Lumo about your meal"
-              selectionColor={colors.contentOnBrand}
-              returnKeyType="send"
-              submitBehavior="blurAndSubmit"
-              underlineColorAndroid="transparent"
-              style={[styles.input, { height: expanded ? inputHeight : LINE_HEIGHT }]}
-            />
-          </View>
-          {expanded ? (
+        <View
+          style={[
+            styles.composer,
+            stacked && styles.composerExpanded,
+            hasImages && styles.composerWithImage,
+          ]}
+        >
+          {stacked ? null : addButton}
+          {hasImages ? (
+            <ScrollView
+              ref={contentScrollRef}
+              style={styles.combinedScroll}
+              keyboardShouldPersistTaps="handled"
+              nestedScrollEnabled
+              showsVerticalScrollIndicator={false}
+              onContentSizeChange={() => {
+                contentScrollRef.current?.scrollToEnd({ animated: false });
+              }}
+            >
+              {imagePreview}
+              {field}
+            </ScrollView>
+          ) : (
+            field
+          )}
+          {stacked ? (
             <View style={styles.actionRow}>
               {addButton}
               {sendButton}
@@ -336,22 +426,35 @@ const styles = StyleSheet.create({
   },
   preview: {
     alignItems: "flex-start",
+    alignSelf: "stretch",
     paddingBottom: space[8],
   },
+  thumbRow: {
+    flexGrow: 0,
+  },
+  thumbRowContent: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: space[8],
+  },
   thumbWrap: {
-    width: 69,
-    height: 69,
+    width: 75,
+    height: 73,
     overflow: "visible",
   },
   thumb: {
+    position: "absolute",
+    left: 0,
+    top: 4,
     width: 69,
     height: 69,
     borderRadius: radius.xs,
+    overflow: "hidden",
   },
   remove: {
     position: "absolute",
-    top: -4,
-    right: -4,
+    top: 0,
+    right: 0,
     width: 16,
     height: 16,
     alignItems: "center",
@@ -390,6 +493,15 @@ const styles = StyleSheet.create({
     alignItems: "stretch",
     paddingVertical: space[4],
   },
+  composerWithImage: {
+    overflow: "visible",
+  },
+  combinedScroll: {
+    maxHeight: MAX_TEXT_HEIGHT,
+    alignSelf: "stretch",
+    width: "100%",
+    flexGrow: 0,
+  },
   field: {
     flex: 1,
     minWidth: 0,
@@ -402,7 +514,6 @@ const styles = StyleSheet.create({
     flexBasis: "auto",
     width: "100%",
     alignSelf: "stretch",
-    maxHeight: MAX_TEXT_HEIGHT,
   },
   measure: {
     position: "absolute",

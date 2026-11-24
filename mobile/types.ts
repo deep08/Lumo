@@ -20,16 +20,24 @@ export type MealCard = {
   recipe?: MealRecipe;
 };
 
+export const MAX_CHAT_IMAGES = 5;
+
 export type ChatMessage = {
   id: string;
   role: "user" | "assistant" | "status";
   text: string;
   image?: string;
+  images?: string[];
   chips?: string[];
   chipSelected?: string;
   meal?: MealCard;
   recipeOpen?: boolean;
 };
+
+export function messageImageUris(message: ChatMessage): string[] {
+  if (message.images?.length) return message.images.slice(0, MAX_CHAT_IMAGES);
+  return message.image ? [message.image] : [];
+}
 
 export type ConversationState = {
   phase: ConversationPhase;

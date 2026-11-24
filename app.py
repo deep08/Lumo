@@ -1707,6 +1707,7 @@ MAX_CONTEXT_TURNS = 40
 VISION_MEDIA_TYPES = {"image/jpeg", "image/png", "image/gif", "image/webp"}
 MAX_IMAGE_EDGE = 1568
 MAX_IMAGE_BYTES = 4_500_000
+MAX_IMAGES_PER_MESSAGE = 5
 
 
 class ChatImageError(ValueError):
@@ -1778,6 +1779,20 @@ def claude_image_block(raw_image):
     }
 
 
+def raw_user_images(item):
+    if item.get("images") is not None:
+        if not isinstance(item.get("images"), list):
+            raise ChatImageError("images must be a list")
+        raw = item.get("images")
+    elif item.get("image") is not None:
+        raw = [item.get("image")]
+    else:
+        raw = []
+    if len(raw) > MAX_IMAGES_PER_MESSAGE:
+        raise ChatImageError("too many images")
+    return raw
+
+
 def web_behavior_text():
     path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "lumo-behavior.md")
     with open(path, encoding="utf-8") as handle:
@@ -1796,15 +1811,15 @@ def normalize_chat_messages(raw_messages):
         if role not in ("user", "assistant"):
             continue
         text = content.strip()[:2000] if isinstance(content, str) else ""
-        image_block = None
-        if role == "user" and item.get("image") is not None:
-            image_block = claude_image_block(item.get("image"))
+        image_blocks = []
+        if role == "user":
+            image_blocks = [claude_image_block(raw) for raw in raw_user_images(item)]
         if role == "assistant":
             if not text:
                 continue
             message = {"role": "assistant", "content": text}
-        elif image_block:
-            blocks = [image_block]
+        elif image_blocks:
+            blocks = list(image_blocks)
             blocks.append({
                 "type": "text",
                 "text": text or "The user sent this photo.",
