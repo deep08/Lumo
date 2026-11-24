@@ -1,5 +1,13 @@
 import { useEffect, useRef, useState, type ElementRef } from "react";
-import { Image, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import {
+  Image,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+  type LayoutChangeEvent,
+} from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import Composer from "../components/Composer";
 import { BackIcon, MoreIcon } from "../components/Icons";
@@ -49,6 +57,7 @@ export default function ConversationScreen({
 }: ConversationScreenProps) {
   const threadRef = useRef<ElementRef<typeof ScrollView>>(null);
   const [viewerUri, setViewerUri] = useState<string | null>(null);
+  const [composerHeight, setComposerHeight] = useState(0);
   const latestChipId = [...messages].reverse().find((message) => message.chips)?.id;
 
   useEffect(() => {
@@ -57,6 +66,12 @@ export default function ConversationScreen({
 
   function keepLatestMessageVisible() {
     threadRef.current?.scrollToEnd({ animated: true });
+  }
+
+  function handleComposerLayout(event: LayoutChangeEvent) {
+    const height = event.nativeEvent.layout.height;
+    setComposerHeight((current) => (Math.abs(current - height) > 0.5 ? height : current));
+    keepLatestMessageVisible();
   }
 
   return (
@@ -81,7 +96,10 @@ export default function ConversationScreen({
       <ScrollView
         ref={threadRef}
         style={styles.thread}
-        contentContainerStyle={styles.threadContent}
+        contentContainerStyle={[
+          styles.threadContent,
+          composerHeight > 0 ? { paddingBottom: composerHeight } : null,
+        ]}
         keyboardShouldPersistTaps="handled"
       >
         {messages.map((message) => {
@@ -157,13 +175,15 @@ export default function ConversationScreen({
           );
         })}
       </ScrollView>
-      <Composer
-        tray
-        value={draft}
-        onChange={onDraftChange}
-        onSubmit={onSend}
-        onLayout={keepLatestMessageVisible}
-      />
+      <View pointerEvents="box-none" style={styles.composerDock}>
+        <Composer
+          tray
+          value={draft}
+          onChange={onDraftChange}
+          onSubmit={onSend}
+          onLayout={handleComposerLayout}
+        />
+      </View>
       <ImageViewer uri={viewerUri} onClose={() => setViewerUri(null)} />
     </View>
   );
@@ -205,6 +225,13 @@ const styles = StyleSheet.create({
   },
   thread: {
     flex: 1,
+  },
+  composerDock: {
+    position: "absolute",
+    left: 0,
+    right: 0,
+    bottom: 0,
+    zIndex: 2,
   },
   threadContent: {
     flexGrow: 1,

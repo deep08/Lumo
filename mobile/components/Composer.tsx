@@ -13,6 +13,7 @@ import {
   type LayoutChangeEvent,
   type TextInputContentSizeChangeEvent,
 } from "react-native";
+import { BlurView } from "expo-blur";
 import * as ImagePicker from "expo-image-picker";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { colors, radius, space } from "../theme";
@@ -23,6 +24,7 @@ const LINE_HEIGHT = 24;
 const MAX_CONTENT_HEIGHT = 144;
 const CONTENT_PAD_Y = space[4];
 const MAX_TEXT_HEIGHT = MAX_CONTENT_HEIGHT - CONTENT_PAD_Y * 2;
+const GLASS_BLUR_INTENSITY = 24;
 const PICKER_DELAY = 300;
 const IMAGE_LIMIT_MESSAGE = "You can attach up to 5 photos.";
 const PICKER_OPTIONS: ImagePicker.ImagePickerOptions = {
@@ -42,6 +44,22 @@ type ComposerProps = {
 
 function clampedTextHeight(height: number) {
   return Math.min(Math.max(Math.ceil(height), LINE_HEIGHT), MAX_TEXT_HEIGHT);
+}
+
+function ComposerGlass() {
+  return (
+    <>
+      {Platform.OS === "ios" ? (
+        <BlurView
+          pointerEvents="none"
+          tint="light"
+          intensity={GLASS_BLUR_INTENSITY}
+          style={styles.glassBlur}
+        />
+      ) : null}
+      <View pointerEvents="none" style={styles.glassFill} />
+    </>
+  );
 }
 
 export default function Composer({
@@ -367,41 +385,44 @@ export default function Composer({
             {value === "" ? " " : value}
           </Text>
         ) : null}
-        <View
-          style={[
-            styles.composer,
-            stacked && styles.composerExpanded,
-            hasImages && styles.composerWithImage,
-          ]}
-        >
-          {stacked ? null : addButton}
-          {hasImages ? (
-            <View style={styles.contentFrame}>
-              <ScrollView
-                ref={contentScrollRef}
-                style={styles.combinedScroll}
-                keyboardShouldPersistTaps="handled"
-                nestedScrollEnabled
-                showsVerticalScrollIndicator={false}
-                onContentSizeChange={() => {
-                  contentScrollRef.current?.scrollToEnd({ animated: false });
-                }}
-              >
-                {imagePreview}
-                {field}
-              </ScrollView>
-            </View>
-          ) : (
-            field
-          )}
-          {stacked ? (
-            <View style={styles.actionRow}>
-              {addButton}
-              {sendButton}
-            </View>
-          ) : (
-            sendButton
-          )}
+        <View style={styles.composerShadow}>
+          <View
+            style={[
+              styles.composer,
+              stacked && styles.composerExpanded,
+              hasImages && styles.composerWithImage,
+            ]}
+          >
+            <ComposerGlass />
+            {stacked ? null : addButton}
+            {hasImages ? (
+              <View style={styles.contentFrame}>
+                <ScrollView
+                  ref={contentScrollRef}
+                  style={styles.combinedScroll}
+                  keyboardShouldPersistTaps="handled"
+                  nestedScrollEnabled
+                  showsVerticalScrollIndicator={false}
+                  onContentSizeChange={() => {
+                    contentScrollRef.current?.scrollToEnd({ animated: false });
+                  }}
+                >
+                  {imagePreview}
+                  {field}
+                </ScrollView>
+              </View>
+            ) : (
+              field
+            )}
+            {stacked ? (
+              <View style={styles.actionRow}>
+                {addButton}
+                {sendButton}
+              </View>
+            ) : (
+              sendButton
+            )}
+          </View>
         </View>
       </View>
     </View>
@@ -414,6 +435,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: space[16],
     overflow: "visible",
     zIndex: 2,
+    pointerEvents: "box-none",
   },
   screenDismiss: {
     position: "absolute",
@@ -427,9 +449,10 @@ const styles = StyleSheet.create({
     position: "relative",
     zIndex: 2,
     overflow: "visible",
+    pointerEvents: "box-none",
   },
   barTray: {
-    backgroundColor: colors.composerTray,
+    backgroundColor: "transparent",
   },
   preview: {
     alignItems: "flex-start",
@@ -478,22 +501,44 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     marginTop: -1,
   },
+  composerShadow: {
+    shadowColor: "#000",
+    shadowOffset: { width: 4, height: 4 },
+    shadowOpacity: 0.04,
+    shadowRadius: 12,
+  },
   composer: {
     flexDirection: "row",
     alignItems: "center",
     paddingVertical: space[4],
     paddingHorizontal: space[8],
     overflow: "hidden",
-    backgroundColor: colors.surfaceDefault,
     borderWidth: 1,
     borderStyle: "solid",
     borderColor: colors.borderDefault,
     borderRadius: radius.md,
     shadowColor: "#000",
-    shadowOffset: { width: 0, height: 0 },
+    shadowOffset: { width: -4, height: -4 },
     shadowOpacity: 0.04,
-    shadowRadius: 6,
+    shadowRadius: 12,
     elevation: 2,
+  },
+  glassBlur: {
+    position: "absolute",
+    top: 0,
+    right: 0,
+    bottom: 0,
+    left: 0,
+    borderRadius: radius.md,
+  },
+  glassFill: {
+    position: "absolute",
+    top: 0,
+    right: 0,
+    bottom: 0,
+    left: 0,
+    backgroundColor: colors.composerGlass,
+    borderRadius: radius.md,
   },
   composerExpanded: {
     flexDirection: "column",

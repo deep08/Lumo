@@ -19,6 +19,7 @@ export const colors = {
   buttonText: "#ffffff",
   userBubble: "#fbf2e0",
   composerTray: "#fcfafa",
+  composerGlass: "rgba(255, 255, 255, 0.8)",
   sendArrow: "#fff9f5",
   borderSubtle: "#e7e1dd",
   borderDefault: "#f5eeeb",
