@@ -20,7 +20,9 @@ import { MAX_CHAT_IMAGES } from "../types";
 import { AddIcon, CameraIcon, GalleryIcon, SendIcon } from "./Icons";
 
 const LINE_HEIGHT = 24;
-const MAX_TEXT_HEIGHT = 144;
+const MAX_CONTENT_HEIGHT = 144;
+const CONTENT_PAD_Y = space[4];
+const MAX_TEXT_HEIGHT = MAX_CONTENT_HEIGHT - CONTENT_PAD_Y * 2;
 const PICKER_DELAY = 300;
 const IMAGE_LIMIT_MESSAGE = "You can attach up to 5 photos.";
 const PICKER_OPTIONS: ImagePicker.ImagePickerOptions = {
@@ -289,6 +291,8 @@ export default function Composer({
     </Pressable>
   );
 
+  const contentPad = stacked && !hasImages;
+  const fieldHeight = expanded ? inputHeight : LINE_HEIGHT;
   const field = (
     <View
       key="composer-field"
@@ -296,8 +300,9 @@ export default function Composer({
       style={[
         styles.field,
         stacked && styles.fieldExpanded,
-        stacked && !hasImages ? { maxHeight: MAX_TEXT_HEIGHT } : null,
-        { height: expanded ? inputHeight : LINE_HEIGHT },
+        contentPad && styles.contentPad,
+        contentPad ? { maxHeight: MAX_CONTENT_HEIGHT } : null,
+        { height: contentPad ? fieldHeight + CONTENT_PAD_Y * 2 : fieldHeight },
       ]}
     >
       <TextInput
@@ -309,13 +314,13 @@ export default function Composer({
         onSubmitEditing={handleSubmit}
         onContentSizeChange={handleContentSizeChange}
         placeholder="Tell Lumo about your meal…"
-        placeholderTextColor={colors.contentDisabled}
+        placeholderTextColor={colors.contentTertiary}
         accessibilityLabel="Tell Lumo about your meal"
         selectionColor={colors.contentOnBrand}
         returnKeyType="send"
         submitBehavior="blurAndSubmit"
         underlineColorAndroid="transparent"
-        style={[styles.input, { height: expanded ? inputHeight : LINE_HEIGHT }]}
+        style={[styles.input, { height: fieldHeight }]}
       />
     </View>
   );
@@ -371,19 +376,21 @@ export default function Composer({
         >
           {stacked ? null : addButton}
           {hasImages ? (
-            <ScrollView
-              ref={contentScrollRef}
-              style={styles.combinedScroll}
-              keyboardShouldPersistTaps="handled"
-              nestedScrollEnabled
-              showsVerticalScrollIndicator={false}
-              onContentSizeChange={() => {
-                contentScrollRef.current?.scrollToEnd({ animated: false });
-              }}
-            >
-              {imagePreview}
-              {field}
-            </ScrollView>
+            <View style={styles.contentFrame}>
+              <ScrollView
+                ref={contentScrollRef}
+                style={styles.combinedScroll}
+                keyboardShouldPersistTaps="handled"
+                nestedScrollEnabled
+                showsVerticalScrollIndicator={false}
+                onContentSizeChange={() => {
+                  contentScrollRef.current?.scrollToEnd({ animated: false });
+                }}
+              >
+                {imagePreview}
+                {field}
+              </ScrollView>
+            </View>
           ) : (
             field
           )}
@@ -474,7 +481,7 @@ const styles = StyleSheet.create({
   composer: {
     flexDirection: "row",
     alignItems: "center",
-    paddingVertical: space[8],
+    paddingVertical: space[4],
     paddingHorizontal: space[8],
     overflow: "hidden",
     backgroundColor: colors.surfaceDefault,
@@ -491,10 +498,22 @@ const styles = StyleSheet.create({
   composerExpanded: {
     flexDirection: "column",
     alignItems: "stretch",
-    paddingVertical: space[4],
   },
   composerWithImage: {
     overflow: "visible",
+  },
+  contentFrame: {
+    maxHeight: MAX_CONTENT_HEIGHT,
+    paddingVertical: space[4],
+    paddingHorizontal: space[8],
+    alignSelf: "stretch",
+    width: "100%",
+    flexGrow: 0,
+    overflow: "hidden",
+  },
+  contentPad: {
+    paddingVertical: space[4],
+    paddingHorizontal: space[8],
   },
   combinedScroll: {
     maxHeight: MAX_TEXT_HEIGHT,
@@ -506,6 +525,7 @@ const styles = StyleSheet.create({
     flex: 1,
     minWidth: 0,
     overflow: "hidden",
+    justifyContent: "center",
   },
   fieldExpanded: {
     flex: 0,
@@ -550,7 +570,7 @@ const styles = StyleSheet.create({
   add: {
     flexShrink: 0,
     padding: space[8],
-    marginRight: 4,
+    marginRight: space[4],
     borderRadius: radius.sm,
   },
   addExpanded: {
@@ -567,7 +587,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     backgroundColor: colors.buttonPrimary,
     borderRadius: radius.pill,
-    marginLeft: 4,
+    marginLeft: space[12],
   },
   sendExpanded: {
     marginLeft: 0,
