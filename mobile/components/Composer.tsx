@@ -8,12 +8,16 @@ import {
   Text,
   TextInput,
   View,
+  type LayoutChangeEvent,
+  type TextInputContentSizeChangeEvent,
 } from "react-native";
 import * as ImagePicker from "expo-image-picker";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { colors, radius, space } from "../theme";
 import { AddIcon, CameraIcon, GalleryIcon, SendIcon } from "./Icons";
 
+const LINE_HEIGHT = 24;
+const MAX_TEXT_HEIGHT = 144;
 const PICKER_DELAY = 300;
 const PICKER_OPTIONS: ImagePicker.ImagePickerOptions = {
   mediaTypes: ["images"],
@@ -28,15 +32,30 @@ type ComposerProps = {
   onChange: (value: string) => void;
   onSubmit: (value: string, imageUri?: string | null) => void;
   tray?: boolean;
+  onLayout?: (event: LayoutChangeEvent) => void;
 };
 
-export default function Composer({ value, onChange, onSubmit, tray = false }: ComposerProps) {
+function clampedTextHeight(height: number) {
+  return Math.min(Math.max(Math.ceil(height), LINE_HEIGHT), MAX_TEXT_HEIGHT);
+}
+
+export default function Composer({
+  value,
+  onChange,
+  onSubmit,
+  tray = false,
+  onLayout,
+}: ComposerProps) {
   const insets = useSafeAreaInsets();
   const inputFocusAt = useRef(0);
   const pendingMenuOpen = useRef(false);
   const [keyboardVisible, setKeyboardVisible] = useState(Keyboard.isVisible());
   const [menuOpen, setMenuOpen] = useState(false);
   const [imageUri, setImageUri] = useState<string | null>(null);
+  const [expanded, setExpanded] = useState(false);
+  const [measureWidth, setMeasureWidth] = useState(0);
+  const [inputHeight, setInputHeight] = useState(LINE_HEIGHT);
+  const [scrollable, setScrollable] = useState(false);
   const canSend = value.trim().length > 0 || Boolean(imageUri);
   const bottomInset = keyboardVisible ? 0 : insets.bottom;
 
@@ -62,6 +81,13 @@ export default function Composer({ value, onChange, onSubmit, tray = false }: Co
       hide.remove();
     };
   }, []);
+
+  useEffect(() => {
+    if (value !== "") return;
+    setExpanded(false);
+    setInputHeight(LINE_HEIGHT);
+    setScrollable(false);
+  }, [value]);
 
   function handleSubmit() {
     if (!canSend) return;
@@ -91,6 +117,34 @@ export default function Composer({ value, onChange, onSubmit, tray = false }: Co
   function handleInputFocus() {
     inputFocusAt.current = Date.now();
     closeMenu();
+  }
+
+  function handleFieldLayout(event: LayoutChangeEvent) {
+    if (expanded) return;
+    const width = event.nativeEvent.layout.width;
+    if (width <= 0) return;
+    if (Math.abs(width - measureWidth) > 0.5) setMeasureWidth(width);
+  }
+
+  function handleMeasureLayout(event: LayoutChangeEvent) {
+    const height = event.nativeEvent.layout.height;
+    if (value === "") {
+      setExpanded(false);
+      setInputHeight(LINE_HEIGHT);
+      setScrollable(false);
+      return;
+    }
+    const needsRoom = value.includes("\n") || height > LINE_HEIGHT + 1;
+    setExpanded(needsRoom);
+    setInputHeight(needsRoom ? clampedTextHeight(height) : LINE_HEIGHT);
+    setScrollable(height > MAX_TEXT_HEIGHT + 0.5);
+  }
+
+  function handleContentSizeChange(event: TextInputContentSizeChangeEvent) {
+    if (!expanded) return;
+    const height = event.nativeEvent.contentSize.height;
+    setInputHeight(clampedTextHeight(height));
+    setScrollable(height > MAX_TEXT_HEIGHT + 0.5);
   }
 
   function dismissMenuAndKeyboard() {
@@ -132,8 +186,36 @@ export default function Composer({ value, onChange, onSubmit, tray = false }: Co
     }
   }
 
+  const addButton = (
+    <Pressable
+      accessibilityLabel="Add"
+      onPress={handleAddPress}
+      style={({ pressed }) => [
+        styles.add,
+        expanded && styles.addExpanded,
+        pressed && styles.addPressed,
+      ]}
+    >
+      <AddIcon />
+    </Pressable>
+  );
+
+  const sendButton = (
+    <Pressable
+      accessibilityLabel="Send message"
+      disabled={!canSend}
+      onPress={handleSubmit}
+      style={[styles.send, expanded && styles.sendExpanded, !canSend && styles.sendDisabled]}
+    >
+      <SendIcon disabled={!canSend} />
+    </Pressable>
+  );
+
   return (
-    <View style={[styles.bar, tray && styles.barTray, { paddingBottom: space[12] + bottomInset }]}>
+    <View
+      onLayout={onLayout}
+      style={[styles.bar, tray && styles.barTray, { paddingBottom: space[12] + bottomInset }]}
+    >
       {menuOpen ? (
         <Pressable
           accessibilityLabel="Dismiss menu"
@@ -177,36 +259,52 @@ export default function Composer({ value, onChange, onSubmit, tray = false }: Co
             </Pressable>
           </View>
         ) : null}
-        <View style={styles.composer}>
-          <Pressable
-            accessibilityLabel="Add"
-            onPress={handleAddPress}
-            style={({ pressed }) => [styles.add, pressed && styles.addPressed]}
+        {measureWidth > 0 ? (
+          <Text
+            pointerEvents="none"
+            onLayout={handleMeasureLayout}
+            style={[styles.measure, { width: measureWidth }]}
           >
-            <AddIcon />
-          </Pressable>
-          <TextInput
-            multiline={false}
-            scrollEnabled
-            value={value}
-            onChangeText={onChange}
-            onFocus={handleInputFocus}
-            onSubmitEditing={handleSubmit}
-            placeholder="Tell Lumo about your meal…"
-            placeholderTextColor={colors.contentDisabled}
-            accessibilityLabel="Tell Lumo about your meal"
-            selectionColor={colors.contentOnBrand}
-            returnKeyType="send"
-            style={styles.input}
-          />
-          <Pressable
-            accessibilityLabel="Send message"
-            disabled={!canSend}
-            onPress={handleSubmit}
-            style={[styles.send, !canSend && styles.sendDisabled]}
+            {value === "" ? " " : value}
+          </Text>
+        ) : null}
+        <View style={[styles.composer, expanded && styles.composerExpanded]}>
+          {expanded ? null : addButton}
+          <View
+            key="composer-field"
+            onLayout={handleFieldLayout}
+            style={[
+              styles.field,
+              expanded && styles.fieldExpanded,
+              { height: expanded ? inputHeight : LINE_HEIGHT },
+            ]}
           >
-            <SendIcon disabled={!canSend} />
-          </Pressable>
+            <TextInput
+              multiline
+              scrollEnabled={scrollable}
+              value={value}
+              onChangeText={onChange}
+              onFocus={handleInputFocus}
+              onSubmitEditing={handleSubmit}
+              onContentSizeChange={handleContentSizeChange}
+              placeholder="Tell Lumo about your meal…"
+              placeholderTextColor={colors.contentDisabled}
+              accessibilityLabel="Tell Lumo about your meal"
+              selectionColor={colors.contentOnBrand}
+              returnKeyType="send"
+              submitBehavior="blurAndSubmit"
+              underlineColorAndroid="transparent"
+              style={[styles.input, { height: expanded ? inputHeight : LINE_HEIGHT }]}
+            />
+          </View>
+          {expanded ? (
+            <View style={styles.actionRow}>
+              {addButton}
+              {sendButton}
+            </View>
+          ) : (
+            sendButton
+          )}
         </View>
       </View>
     </View>
@@ -287,26 +385,65 @@ const styles = StyleSheet.create({
     shadowRadius: 6,
     elevation: 2,
   },
-  input: {
+  composerExpanded: {
+    flexDirection: "column",
+    alignItems: "stretch",
+    paddingVertical: space[4],
+  },
+  field: {
     flex: 1,
     minWidth: 0,
+    overflow: "hidden",
+  },
+  fieldExpanded: {
+    flex: 0,
+    flexGrow: 0,
+    flexShrink: 0,
+    flexBasis: "auto",
+    width: "100%",
+    alignSelf: "stretch",
+    maxHeight: MAX_TEXT_HEIGHT,
+  },
+  measure: {
+    position: "absolute",
+    left: -4096,
+    top: 0,
+    color: colors.contentPrimary,
+    fontSize: 16,
+    fontWeight: "400",
+    lineHeight: LINE_HEIGHT,
+    includeFontPadding: false,
+  },
+  input: {
+    width: "100%",
     margin: 0,
     paddingTop: 0,
     paddingRight: 0,
     paddingBottom: 0,
     paddingLeft: 0,
-    height: 24,
+    backgroundColor: "transparent",
     color: colors.contentPrimary,
-    fontSize: 14,
+    fontSize: 16,
     fontWeight: "400",
-    textAlignVertical: "center",
+    lineHeight: LINE_HEIGHT,
+    textAlignVertical: "top",
     includeFontPadding: false,
+  },
+  actionRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    alignSelf: "stretch",
+    height: 44,
   },
   add: {
     flexShrink: 0,
     padding: space[8],
     marginRight: 4,
     borderRadius: radius.sm,
+  },
+  addExpanded: {
+    marginRight: 0,
   },
   addPressed: {
     backgroundColor: colors.surfaceBase,
@@ -320,6 +457,9 @@ const styles = StyleSheet.create({
     backgroundColor: colors.buttonPrimary,
     borderRadius: radius.pill,
     marginLeft: 4,
+  },
+  sendExpanded: {
+    marginLeft: 0,
   },
   sendDisabled: {
     backgroundColor: colors.buttonDisabled,

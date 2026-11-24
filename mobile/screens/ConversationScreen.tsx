@@ -55,6 +55,10 @@ export default function ConversationScreen({
     threadRef.current?.scrollToEnd({ animated: true });
   }, [messages, phase]);
 
+  function keepLatestMessageVisible() {
+    threadRef.current?.scrollToEnd({ animated: true });
+  }
+
   return (
     <View style={styles.screen}>
       <SafeAreaView edges={["top"]} style={styles.headerSafe}>
@@ -148,7 +152,13 @@ export default function ConversationScreen({
           );
         })}
       </ScrollView>
-      <Composer tray value={draft} onChange={onDraftChange} onSubmit={onSend} />
+      <Composer
+        tray
+        value={draft}
+        onChange={onDraftChange}
+        onSubmit={onSend}
+        onLayout={keepLatestMessageVisible}
+      />
       <ImageViewer uri={viewerUri} onClose={() => setViewerUri(null)} />
     </View>
   );
